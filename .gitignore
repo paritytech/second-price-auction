@@ -1,0 +1,5 @@
+dist/bundle.js
+bin/
+node_modules
+package
+.DS_Store

@@ -1,0 +1,8 @@
+{
+	"id": "skeleton",
+	"name": "Skeleton",
+	"description": "A skeleton dapp",
+	"version": "0.1",
+	"author": "Parity Technologies Ltd",
+	"iconUrl": "title.png"
+}

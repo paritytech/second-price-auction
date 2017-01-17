@@ -1,0 +1,180 @@
+body {
+	font: 100% "Trebuchet MS", sans-serif;
+	margin: 1em;
+}
+._account {
+	font-family: Monospace;
+}
+._denom {
+	font-size: small;
+	border: 1px #ccc solid;
+	padding: 0px 3px;
+	border-radius: 8px;
+	font-weight: normal;
+	margin-left: 3px;
+}
+._balance {
+	font-weight: bold;
+}
+._grand ._denom { background-color: #ffe3e3; }
+._grand._balance { color: #400; }
+._ether ._denom { background-color: #fff3e5; }
+._ether._balance { color: #420; }
+._finney ._denom { background-color: #ffe; }
+._finney._balance { color: #440; }
+._szabo ._denom { background-color: #efe; }
+._szabo._balance { color: #040; }
+._wei ._denom { background-color: #eff; }
+._wei._balance { color: #044; }
+._dao ._denom { background-color: #fff; border: 2px #800 solid; vertical-align: middle; position: relative; bottom: 0.14ex; font-weight: bold; }
+._dao._balance { color: #800; }
+
+input.balance {
+	width: 5ex;
+	text-align: right;
+}
+
+div.log {
+	float: right;
+}
+
+div.progress {
+  margin-top: 0;
+  line-height: 0pt;
+  background: #b0c8f0;
+}
+
+span.progress-done {
+  display: inline-block;
+  height: 2pt;
+  vertical-align: top;
+  background: #58f;
+  animation-duration: 15s;
+}
+
+div.card {
+  background: white;
+  box-shadow: 0px 2px 8px 0px #aaa;
+  margin-bottom: 1ex;
+}
+
+div.card-body {
+  padding: 0.5em;
+}
+
+div.card-datestamp {
+	float: right;
+	color: #888;
+	font-size: small;
+	margin-left: 1em;
+}
+
+div.card-part {
+  background: white;
+  box-shadow: 0px 2px 6px 0px #aaa;
+  border-bottom: 1px #ccc dashed;
+}
+
+div.card-part:last-of-type {
+  border-bottom: none;
+}
+
+div.card.pendingEvent div.card-body {
+	opacity: 0.25;
+}
+
+div.card-body.deposit {
+  border-left: 5pt #fcc solid;
+}
+
+div.card-body.withdraw {
+  border-left: 5pt #ccf solid;
+}
+
+div.card-label {
+	font-size: x-small;
+	font-weight: bold;	
+	vertical-align: bottom;
+	min-width: 5em;
+	float: left;
+}
+
+div.deposit div.card-label {
+	color: #f88;
+}
+
+div.withdraw div.card-label {
+	color: #88f;
+}
+
+.button {
+    display: inline-block;
+    margin: 10px;
+    -webkit-border-radius: 8px;
+    -moz-border-radius: 8px;
+    border-radius: 8px;
+    -webkit-box-shadow:    0 8px 0 #c5376d, 0 15px 20px rgba(0, 0, 0, .35);
+    -moz-box-shadow: 0 8px 0 #c5376d, 0 15px 20px rgba(0, 0, 0, .35);
+    box-shadow: 0 8px 0 #c5376d, 0 15px 20px rgba(0, 0, 0, .35);
+    -webkit-transition: -webkit-box-shadow .1s ease-in-out;
+    -moz-transition: -moz-box-shadow .1s ease-in-out;
+    -o-transition: -o-box-shadow .1s ease-in-out;
+    transition: box-shadow .1s ease-in-out;
+    font-size: 50px;
+    color: #fff;
+}
+
+.button span {
+    display: inline-block;
+    padding: 20px 30px;
+    background-color: #ec528d;
+    background-image: -webkit-gradient(linear, 0% 0%, 0% 100%, from(hsla(338, 90%, 80%, .8)), to(hsla(338, 90%, 70%, .2)));
+    background-image: -webkit-linear-gradient(hsla(338, 90%, 80%, .8), hsla(338, 90%, 70%, .2));
+    background-image: -moz-linear-gradient(hsla(338, 90%, 80%, .8), hsla(338, 90%, 70%, .2));
+    background-image: -o-linear-gradient(hsla(338, 90%, 80%, .8), hsla(338, 90%, 70%, .2));
+    -webkit-border-radius: 8px;
+    -moz-border-radius: 8px;
+    border-radius: 8px;
+    -webkit-box-shadow: inset 0 -1px 1px rgba(255, 255, 255, .15);
+    -moz-box-shadow: inset 0 -1px 1px rgba(255, 255, 255, .15);
+    box-shadow: inset 0 -1px 1px rgba(255, 255, 255, .15);
+    font-family: 'Pacifico', Arial, sans-serif;
+    line-height: 1;
+    text-shadow: 0 -1px 1px rgba(175, 49, 95, .7);
+    -webkit-transition: background-color .2s ease-in-out, -webkit-transform .1s ease-in-out;
+    -moz-transition: background-color .2s ease-in-out, -moz-transform .1s ease-in-out;
+    -o-transition: background-color .2s ease-in-out, -o-transform .1s ease-in-out;
+    transition: background-color .2s ease-in-out, transform .1s ease-in-out;
+}
+
+.button:hover span {
+    background-color: #ec6a9c;
+    text-shadow: 0 -1px 1px rgba(175, 49, 95, .9), 0 0 5px rgba(255, 255, 255, .8);
+}
+
+.button:active, .button:focus {
+    -webkit-box-shadow:    0 8px 0 #c5376d, 0 12px 10px rgba(0, 0, 0, .3);
+    -moz-box-shadow: 0 8px 0 #c5376d, 0 12px 10px rgba(0, 0, 0, .3);
+    box-shadow:    0 8px 0 #c5376d, 0 12px 10px rgba(0, 0, 0, .3);
+}
+
+.button:active span {
+    -webkit-transform: translate(0, 4px);
+    -moz-transform: translate(0, 4px);
+    -o-transform: translate(0, 4px);
+    transform: translate(0, 4px);
+}
+
+#app {
+	text-align: center;
+}
+
+#youhave {
+	font-size: x-large;
+}
+
+#extrainfo {
+	padding-top: 4em;  
+	font-size: x-small;
+	color: #888;
+}
