@@ -1,9 +1,9 @@
 body {
-	font: 100% "Trebuchet MS", sans-serif;
-	margin: 1em;
+	font-family: 'Roboto', sans-serif;
+	margin: 0;
 }
 ._account {
-	font-family: Monospace;
+/*	font-family: Monospace;*/
 }
 ._denom {
 	font-size: small;
@@ -93,7 +93,7 @@ div.card-body.withdraw {
 
 div.card-label {
 	font-size: x-small;
-	font-weight: bold;	
+	font-weight: bold;
 	vertical-align: bottom;
 	min-width: 5em;
 	float: left;
@@ -165,6 +165,41 @@ div.withdraw div.card-label {
     transform: translate(0, 4px);
 }
 
+._isActive {
+	border-radius: 0.5ex;
+	padding-left: 0.5ex;
+	padding-right: 0.5ex;
+	font-size: small;
+}
+
+._isActive._active {
+	border: 0.25ex #ada solid;
+	background: #cfc;
+}
+
+._isActive._inactive {
+	border: 0.25ex #bbb solid;
+	background: #ddd;
+}
+
+img._identigram {
+	border-radius: 50%;
+	width: 1.25em;
+	vertical-align: text-bottom;
+}
+img._identigram._small {
+	width: 16px;
+}
+img._identigram._medium {
+	width: 32px;
+}
+img._identigram._large {
+	width: 56px;
+}
+img._identigram._xlarge {
+	width: 128px;
+}
+
 #app {
 	text-align: center;
 }
@@ -174,7 +209,7 @@ div.withdraw div.card-label {
 }
 
 #extrainfo {
-	padding-top: 4em;  
+	padding-top: 4em;
 	font-size: x-small;
 	color: #888;
 }

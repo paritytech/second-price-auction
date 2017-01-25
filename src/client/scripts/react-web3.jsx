@@ -2,7 +2,6 @@ import 'jquery';
 import BigNumber from 'bignumber.js';
 import React from 'react';
 import {render} from 'react-dom';
-import Web3 from 'web3';
 
 var isManaged = typeof(window.web3) == "object";
 var web3 = isManaged ? window.web3 : new Web3(new Web3.providers.HttpProvider("http://127.0.0.1:8080/rpc"));
@@ -70,7 +69,7 @@ export class Balance extends React.Component {
 			</span>
 		);
 	}
-} 
+}
 //Balance.propTypes = { value: React.PropTypes.object };
 
 export class InputBalance extends React.Component {
