@@ -7,6 +7,7 @@ import blockies from 'blockies';
 import RaisedButton from 'material-ui/RaisedButton';
 import TextField from 'material-ui/TextField';
 import {Toolbar, ToolbarGroup, ToolbarSeparator, ToolbarTitle} from 'material-ui/Toolbar';
+import moment from 'moment';
 
 export function createIdentityImg (address, scale = 8) {
   return blockies({
@@ -29,7 +30,7 @@ class ReactiveComponent extends React.Component {
 		this.manageProps({}, this.props);
 		let that = this;
 		Object.keys(this.extraState).forEach(f => {
-			if (this.extraState[f] instanceof BondFace)
+			if (this.extraState[f] instanceof Bond)
 				this.extraState[f].subscribe(a => {
 					var s = that.state || {};
 					s[f] = a;
@@ -57,10 +58,10 @@ class ReactiveComponent extends React.Component {
 		this.reactiveProps.forEach(f => {
 //			console.log(`managing field ${f}`);
 			if (nextProps[f] !== props[f]) {
-				if (props[f] instanceof BondFace)
+				if (props[f] instanceof Bond)
 					props[f].drop();
 
-				if (nextProps[f] instanceof BondFace)
+				if (nextProps[f] instanceof Bond)
 					nextProps[f].subscribe(a => {
 						var s = that.state || {};
 						s[f] = a;
@@ -124,7 +125,7 @@ function splitValue(a) {
 	return {base: a, denom: i};
 }
 
-export class BondFace {
+export class Bond {
 	constructor() {
 		this.fire = [];
 	}
@@ -142,6 +143,10 @@ export class BondFace {
 	drop () {}
 	subscribe (f) { this.fire.push(f); if (this.ready()) f(this.v);  }
 	ready () { return typeof(this.v) != 'undefined'; }
+
+    map(f) {
+        return new TransformBond(f, [this]);
+    }
 }
 
 /// f is function which returns a promise. a is a set of dependencies
@@ -150,17 +155,16 @@ export class BondFace {
 /// underlying value which is passed.
 ///
 /// we return a bond (an ongoing promise).
-export class Bond extends BondFace {
+export class TransformBond extends Bond {
 	constructor(f, a = [], d = [], context = parity.api) {
 		super();
-		this.v = null;
 		this.f = f;
 		this.a = a;
 		this.context = context;
 		d.forEach(i => i.subscribe((() => this.poll()).bind(this)));
 		var nd = 0;
 		a.forEach(i => {
-			if (i instanceof BondFace) {
+			if (i instanceof Bond) {
 				i.subscribe(this.poll.bind(this));
 				nd++;
 			}
@@ -174,9 +178,9 @@ export class Bond extends BondFace {
 			this.poll();
 	}
 	poll () {
-		if (this.a.findIndex(i => (i instanceof BondFace && !i.ready()) || (i instanceof Promise && typeof(i.v) === 'undefined')) != -1)
+		if (this.a.findIndex(i => (i instanceof Bond && !i.ready()) || (i instanceof Promise && typeof(i.v) === 'undefined')) != -1)
 			return;	// still have undefined params.
-		let r = this.f.apply(this.context, this.a.map(i => (i instanceof BondFace || i instanceof Promise) ? i.v : i));
+		let r = this.f.apply(this.context, this.a.map(i => (i instanceof Bond || i instanceof Promise) ? i.v : i));
 		if (r instanceof Promise)
 			r.then(this.changed.bind(this));
 		else
@@ -187,7 +191,7 @@ export class Bond extends BondFace {
 	}
 }
 
-export class SecondBond extends BondFace {
+export class SecondBond extends Bond {
 	constructor() {
 		super();
 		this.interval = window.setInterval(this.trigger.bind(this), 1000);
@@ -202,7 +206,7 @@ export class SecondBond extends BondFace {
 }
 
 // TODO: Use more generic means to check on number, ideally push notification.
-export class SubscriptionBond extends BondFace {
+export class SubscriptionBond extends Bond {
 	constructor(rpc) {
 		super();
 		parity.api.subscribe(rpc, (e, n) => {
@@ -217,7 +221,7 @@ export class SubscriptionBond extends BondFace {
 
 let BlockNumberBond = () => new SubscriptionBond('eth_blockNumber');
 
-export class Transaction extends BondFace {
+export class Transaction extends Bond {
 	constructor(tx) {
 		super();
 		var p = parity.api.parity.postTransaction(tx)
@@ -249,13 +253,15 @@ export class Transaction extends BondFace {
 	var bonds = {};
 	bonds.blockNumber = new BlockNumberBond;
 	bonds.time = new SecondBond;	// TODO: pass the time through as v.
-	bonds.accountsInfo = new Bond(parity.api.parity.accountsInfo, [], [bonds.time]); //new SubscriptionBond('parity_accountsInfo');
+	bonds.accountsInfo = new TransformBond(parity.api.parity.accountsInfo, [], [bonds.time]); //new SubscriptionBond('parity_accountsInfo');
+    bonds.netChain = new TransformBond(parity.api.parity.netChain, [], [bonds.time]);
+    bonds.peerCount = new TransformBond(parity.api.net.peerCount, [], [bonds.time]);
 	parity.bonds = bonds;
 }
 
-Function.__proto__.bond = function(...args) { return new Bond(this, args); };
-Function.__proto__.blockBond = function(...args) { return new Bond(this, args, [parity.bonds.blockNumber]); };
-Function.__proto__.secondBond = function(...args) { return new Bond(this, args, [parity.bonds.time]); };
+Function.__proto__.bond = function(...args) { return new TransformBond(this, args); };
+Function.__proto__.blockBond = function(...args) { return new TransformBond(this, args, [parity.bonds.blockNumber]); };
+Function.__proto__.secondBond = function(...args) { return new TransformBond(this, args, [parity.bonds.time]); };
 
 ////
 // GENERIC COMPONENTS
@@ -282,16 +288,41 @@ export class Balance extends ReactiveComponent {
 	}
 }
 
+function formatBlockNumber(n) {
+    return '#' + ('' + n).replace(/(\d)(?=(\d{3})+$)/g, "$1,");
+}
+
 export class BlockNumber extends ReactiveComponent {
 	constructor() { super(['value']); }
 
 	render() {
+        let classes = this.props.classes === null ? '_blocknumber' : this.props.classes;
+        let undefClasses = this.props.undefClasses === null ? '_blocknumber _undefined' : this.props.undefClasses;
+        let undefContent = this.props.undefContent === null ? '?' : this.props.undefContent;
 		if (this.state.value === null || typeof(this.state.value) == 'undefined')
-			return (<span className="_undefined _blocknumber">?</span>);
+			return (<span className={undefClasses}>{undefContent}</span>);
 		var a = ('' + this.state.value).replace(/(\d)(?=(\d{3})+$)/g, "$1,");
-		return <span className="_blocknumber">#{a}</span>;
+		return <span className={classes}>#{a}</span>;
 	}
 };
+
+export class Reactive extends ReactiveComponent {
+    constructor() { super(['value', 'className']); }
+
+	render() {
+        let className = typeof(this.state.className) === 'function' ?
+            this.state.className(this.state.value) :
+            typeof(this.state.className) === 'string' ?
+            this.state.className :
+            '';
+        let undefClassName = this.props.undefClassName === null ? '_undefined' : this.props.undefClassName;
+        let undefContent = this.props.undefContent === null ? '?' : this.props.undefContent;
+		if (this.state.value === null || typeof(this.state.value) == 'undefined')
+			return (<span className={undefClassName}>{undefContent}</span>);
+        let a = this.props.transform ? this.props.transform(this.state.value) : this.state.value;
+		return <span className={className}>{a}</span>;
+	}
+}
 
 export class Account extends ReactiveComponent {
 	constructor() { super(['address'], {accountsInfo: parity.bonds.accountsInfo}); }
@@ -329,17 +360,17 @@ class Progress extends ReactiveComponent {
 
 	render () {
 		if (typeof(this.state.request) != 'object' || this.state.request == null)
-			return (<span></span>);
+			return (<div className='_progress _null'/>);
 		var x;
 		if (x = this.state.request.requested)
-			return (<span>Request Id: {x}</span>);
+			return (<div className='_progress _authorising'>Authorising transaction...</div>);
 		if (x = this.state.request.signed)
-			return (<span>Submitted to chain: {x}</span>);
+			return (<div className='_progress _submitting'>Confirming transaction...</div>);
 		if (x = this.state.request.confirmed)
-			return (<span>Confirmed at <BlockNumber value={x.blockNumber}/></span>);
+			return (<div className='_progress _confirmed'>Confirmed at <BlockNumber value={x.blockNumber}/></div>);
 		if (x = this.state.request.failed)
-			return (<span>Failed: {x.text}</span>);
-		return (<span>???</span>);
+			return (<div className='_progress _failed'>Failed: {x.text}</div>);
+		return (<div>???</div>);
 	}
 }
 
@@ -348,19 +379,6 @@ class Progress extends ReactiveComponent {
 
 const ReceipterABI = [{"constant":true,"inputs":[],"name":"endBlock","outputs":[{"name":"","type":"uint256"}],"payable":false,"type":"function"},{"constant":true,"inputs":[],"name":"total","outputs":[{"name":"","type":"uint256"}],"payable":false,"type":"function"},{"constant":true,"inputs":[{"name":"","type":"address"}],"name":"record","outputs":[{"name":"","type":"uint256"}],"payable":false,"type":"function"},{"constant":false,"inputs":[],"name":"kill","outputs":[],"payable":false,"type":"function"},{"constant":false,"inputs":[],"name":"halt","outputs":[],"payable":false,"type":"function"},{"constant":true,"inputs":[],"name":"treasury","outputs":[{"name":"","type":"address"}],"payable":false,"type":"function"},{"constant":false,"inputs":[{"name":"_recipient","type":"address"}],"name":"receiveFrom","outputs":[],"payable":true,"type":"function"},{"constant":true,"inputs":[],"name":"beginBlock","outputs":[{"name":"","type":"uint256"}],"payable":false,"type":"function"},{"constant":true,"inputs":[],"name":"isHalted","outputs":[{"name":"","type":"bool"}],"payable":false,"type":"function"},{"constant":false,"inputs":[],"name":"unhalt","outputs":[],"payable":false,"type":"function"},{"constant":true,"inputs":[],"name":"admin","outputs":[{"name":"","type":"address"}],"payable":false,"type":"function"},{"inputs":[{"name":"_admin","type":"address"},{"name":"_treasury","type":"address"},{"name":"_beginBlock","type":"uint256"},{"name":"_endBlock","type":"uint256"}],"payable":false,"type":"constructor"},{"payable":true,"type":"fallback"},{"anonymous":false,"inputs":[{"indexed":true,"name":"recipient","type":"address"},{"indexed":false,"name":"amount","type":"uint256"}],"name":"Received","type":"event"},{"anonymous":false,"inputs":[],"name":"Halted","type":"event"},{"anonymous":false,"inputs":[],"name":"Unhalted","type":"event"}];
 let Receipter = parity.api.newContract(ReceipterABI, '0x7d8D1E1859cA759934Ed9784e9c142Df5d15EEba');
-
-class Status extends ReactiveComponent {
-	constructor() {
-		super(['value']);
-	}
-
-	render () {
-		if (this.state.value)
-			return (<span className="_isActive _active">ACTIVE</span>);
-		else
-			return (<span className="_isActive _inactive">INACTIVE</span>);
-	}
-}
 
 export class BalanceInput extends React.Component {
     constructor() {
@@ -371,17 +389,12 @@ export class BalanceInput extends React.Component {
 
 class ContributionPanel extends ReactiveComponent {
 	constructor() {
-		super(['request', 'status']);
+		super(['request']);
         let d = '1 ether';
         this.state = { valueRaw: d, value: interpretQuantity(d) };
 	}
-	isActive () { return this.state.status != null && this.state.status.during != null; }
 	render () {
-		return (<div>
-			<Status
-				value={this.isActive()}
-			/>
-            <br />
+		return (<div id="contributionPanel">
 			<TextField
                 floatingLabelText="How much to contribute?"
 				hintText="1 ether"
@@ -389,38 +402,46 @@ class ContributionPanel extends ReactiveComponent {
                 errorText={this.state.value === null ? 'Invalid quantity' : null}
                 onChange={(e, v) => { this.setState({valueRaw: v, value: interpretQuantity(v)}); }}
 			/>
-            <br />
 			<RaisedButton
 				label="contribute"
 				onClick={()=>{ this.props.onContribute(this.state.value); }}
-				disabled={!this.isActive() || this.state.value === null || (this.state.request != null && !this.state.request.failed && !this.state.request.confirmed)}
+				disabled={this.state.value === null || (this.state.request != null && !this.state.request.failed && !this.state.request.confirmed)}
 			/>
-            <br />
 			<Progress request={this.state.request}/>
 		</div>);
 	}
 }
 
-export class Manager extends React.Component {
+function capitalizeFirstLetter(s) {
+    return s.charAt(0).toUpperCase() + s.slice(1);
+}
+
+let contributionStatus = new TransformBond((h, b, e, c) =>
+    c < b ? { before: { start: b, after: b - c } } :
+    c >= e ? { after: { end: e, ago: c - e } } :
+    h ? { halted: {} } :
+    { active: { done: c - b, have: e - c } }
+, [
+    Receipter.instance.isHalted.call.bond(),
+    Receipter.instance.beginBlock.call(),
+    Receipter.instance.endBlock.call(),
+    parity.bonds.blockNumber
+]);
+
+function niceStatus(s) {
+    let blocksToTime = blocks => moment.unix(0).to(moment.unix(blocks * 15));
+    return s.before ? `Starts ${blocksToTime(s.before.after)}` :
+        s.after ? `Ended ${blocksToTime(-s.after.ago)}` :
+        s.halted ? `Halted` :
+        `Open for another ${blocksToTime(s.active.have).replace('in ', '')}`;
+}
+
+let contributionTotal = Receipter.instance.total.call.blockBond();
+
+export class Manager extends ReactiveComponent {
 	constructor() {
-		super();
+		super([], { status: contributionStatus });
 		this.state = { current: null };
-		this.status = ((h, b, e, c) => {
-			if (c < b)
-				return { before: { blocks: b - c } };
-			if (c < e)
-				if (h)
-					return { halted: {} };
-				else
-					return { during: { blocks: e - c } };
-			else
-				return { ended: {} };
-		}).bond(
-			Receipter.instance.isHalted.call.bond(),
-			Receipter.instance.beginBlock.call(),
-			Receipter.instance.endBlock.call(),
-			parity.bonds.blockNumber
-		);
 	}
 	handleContribute (value) {
         if (value !== null)
@@ -429,11 +450,10 @@ export class Manager extends React.Component {
             window.alert(`Invalid value to contribute: ${value}`);
 	}
 	render () {
-		return (<div>
-            <div>Receipter is at: <Account address={Receipter.instance.address}/></div>
-			<div>Total contributions: <Balance value={Receipter.instance.total.call.blockBond()}/></div>
-			<ContributionPanel status={this.status} request={this.state.current} onContribute={this.handleContribute.bind(this)}/>
-		</div>);
+        if (this.state.status && this.state.status.active)
+		    return <ContributionPanel request={this.state.current} onContribute={this.handleContribute.bind(this)}/>;
+        else
+            return <h2>Contribution period not active</h2>;
 	}
 }
 
@@ -442,22 +462,88 @@ export class App extends React.Component {
 		super();
 	}
 	render () {
-		return (<div>
-			<Toolbar>
-				<ToolbarGroup>
-		        	<ToolbarTitle text="Contribution" />
-		        </ToolbarGroup>
-			</Toolbar>
-			<div style={{minHeight: '20em', padding: '2em'}}>
-				<div>Current / Period: <BlockNumber value={parity.bonds.blockNumber}/>: <BlockNumber value={Receipter.instance.beginBlock.call.blockBond()}/> - <BlockNumber value={Receipter.instance.endBlock.call.blockBond()}/></div>
-				<div>This is your coinbase: <RichAccount address={parity.api.eth.coinbase.secondBond()}/></div>
-				<div>Your account is: <RichAccount address={'0x0048440ee17ee30817348949d2ec46647e8b6179'}/></div>
-			</div>
-			<Manager />
+		return (<div className={'site'}>
+          <header>
+            <nav className={'nav-header'}>
+              <div className={'container'}>
+                <span id="logo">YOUR LOGO HERE</span>
+              </div>
+            </nav>
+          </header>
+          <div className={'site-content'}>
+            <section className={'contrib-hero'}>
+              <div className={'container'}>
+                <div className={'row'}>
+                  <div id="status">
+                    <div id="status-title">
+                      <h1>Contribution</h1>
+                      Contribute to our mission's success
+                    </div>
+                    <div className={'status-rest'}>
+                      <div>
+                        <div className={'title'}>Network<br />Summary</div>
+                        <div className={'field'}>
+                          <div>Status</div>
+                          <Reactive value={parity.bonds.peerCount.map(c => c > 0 ? '● Online' : '○ Offline')} className={parity.bonds.peerCount.map(c => '_fieldValue ' + (c > 0 ? '_online' : '_offline'))}/>
+                        </div>
+                        <div className={'field'}>
+                          <div>Network</div>
+                          <Reactive value={parity.bonds.netChain.map(capitalizeFirstLetter)} className={parity.bonds.netChain.map(c => '_fieldValue _' + c)} />
+                        </div>
+                        <div className={'field'}>
+                          <div>Number</div>
+                          <Reactive value={parity.bonds.blockNumber.map(formatBlockNumber)} className='_fieldValue _basic' />
+                        </div>
+                      </div>
+                      <div>
+                        <div className={'title'}>Contribution<br />Summary</div>
+                        <div className={'field'}>
+                          <div>Status</div>
+                          <Reactive value={contributionStatus.map(niceStatus)} className={contributionStatus.map(s => '_fieldValue ' + (s.active ? '_active' : s.before ? '_before' : '_after'))} />
+                        </div>
+                        <div className={'field'}>
+                          <div>Received</div>
+                          <Reactive value={contributionTotal.map(c => `${+c.div(1000000000000000) / 1000} ETH`)} className='_fieldValue _basic' />
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+              </div>
+            </section>
+            <section className={'contrib-main'}>
+              <div className={'container'}>
+                <div className={'row'}>
+                  <section id="terms">
+                    <h1>Terms and Conditions</h1>
+                    I hereby confirm I have read all applicable terms and conditions.
+                  </section>
+                  <section id="action">
+                    <h1>Send Funds</h1>
+                    <Manager />
+                  </section>
+                </div>
+              </div>
+            </section>
+          </div>
+
+          <footer className={'page-footer'}>
+            <div className={'container'}>
+              <div className={'row'}>
+                All content copyright Somebody. This is based on the Skeleton Contribution DApplication by Parity Technologies, 2017. All rights reserved.
+              </div>
+            </div>
+          </footer>
 		</div>);
 	}
 }
 /*
+<div style={{minHeight: '20em', padding: '2em'}}>
+    <div>Current / Period: : <BlockNumber value={Receipter.instance.beginBlock.call.blockBond()}/> - <BlockNumber value={Receipter.instance.endBlock.call.blockBond()}/></div>
+    <div>This is your coinbase: <RichAccount address={parity.api.eth.coinbase.secondBond()}/></div>
+    <div>Your account is: <RichAccount address={'0x0048440ee17ee30817348949d2ec46647e8b6179'}/></div>
+    <div>Receipter is at: <Account address={Receipter.instance.address}/></div>
+</div>
 
 */
 ////
@@ -467,3 +553,5 @@ window.blockies = blockies;
 window.interpretQuantity = interpretQuantity;
 window.Receipter = Receipter;
 window.Bond = Bond;
+window.TransformBond = TransformBond;
+window.moment = moment;
