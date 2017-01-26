@@ -28,8 +28,21 @@ header, footer, section {
   z-index: 10;
 }
 
+footer h1 {
+    font-size: 16px;
+    font-weight: normal;
+    color: #ddd;
+    margin-bottom: 16px;
+}
+
+.footer {
+    font-size: 14px;
+    font-weight: normal;
+    color: #bbb;
+}
+
 .contrib-hero {
-  background-color: #222a44;
+  background: linear-gradient(to bottom, #3f4c6b 0%,#222a44 100%);
   background-repeat: no-repeat;
   background-size: cover;
   background-position: 50% 50%;
@@ -361,22 +374,30 @@ div.withdraw div.card-label {
 	background: #ddd;
 }
 
-img._identigram {
+img._accountIcon {
 	border-radius: 50%;
 	width: 1.25em;
 	vertical-align: text-bottom;
 }
-img._identigram._small {
+img._accountIcon._small {
 	width: 16px;
 }
-img._identigram._medium {
+img._accountIcon._medium {
 	width: 32px;
 }
-img._identigram._large {
+img._accountIcon._large {
 	width: 56px;
 }
-img._identigram._xlarge {
+img._accountIcon._xlarge {
 	width: 128px;
+}
+
+img#logoIcon {
+    border-radius: 16px;
+    width: 32px;
+    vertical-align: middle;
+    margin-bottom: 4px;
+    margin-right: 6px;
 }
 
 #youhave {

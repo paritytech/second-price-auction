@@ -2,12 +2,15 @@ import styles from "../style.css";
 import React from 'react';
 import BigNumber from 'bignumber.js';
 import {render} from 'react-dom';
-//import {AccountBalance} from './react-web3.jsx';
 import blockies from 'blockies';
 import RaisedButton from 'material-ui/RaisedButton';
 import TextField from 'material-ui/TextField';
 import {Toolbar, ToolbarGroup, ToolbarSeparator, ToolbarTitle} from 'material-ui/Toolbar';
 import moment from 'moment';
+
+function capitalizeFirstLetter(s) {
+    return s.charAt(0).toUpperCase() + s.slice(1);
+}
 
 export function createIdentityImg (address, scale = 8) {
   return blockies({
@@ -88,12 +91,14 @@ class ReactiveComponent extends React.Component {
 }
 
 const denominations = [ "wei", "Kwei", "Mwei", "Gwei", "szabo", "finney", "ether", "grand", "Mether", "Gether", "Tether", "Pether", "Eether", "Zether", "Yether", "Nether", "Dether", "Vether", "Uether" ];
+
 function denominationMultiplier(s) {
     let i = denominations.indexOf(s);
     if (i < 0)
         throw "Invalid denomination";
     return (new BigNumber(1000)).pow(i);
 }
+
 function interpretQuantity(s) {
     try {
         let m = s.toLowerCase().match('([0-9,.]+) *([a-zA-Z]+)?');
@@ -123,6 +128,10 @@ function splitValue(a) {
 		a = a.div(1000);
 
 	return {base: a, denom: i};
+}
+
+function formatBlockNumber(n) {
+    return '#' + ('' + n).replace(/(\d)(?=(\d{3})+$)/g, "$1,");
 }
 
 export class Bond {
@@ -191,14 +200,14 @@ export class TransformBond extends Bond {
 	}
 }
 
-export class SecondBond extends Bond {
+export class TimeBond extends Bond {
 	constructor() {
 		super();
 		this.interval = window.setInterval(this.trigger.bind(this), 1000);
 		this.trigger();
 	}
 	trigger() {
-		this.fire.forEach(f => f());
+		this.fire.forEach(f => f(Date.now()));
 	}
 	drop () {
 		window.clearInterval(this.interval);
@@ -218,8 +227,6 @@ export class SubscriptionBond extends Bond {
 		parity.api.unsubscribe(this.subscription);
 	}
 }
-
-let BlockNumberBond = () => new SubscriptionBond('eth_blockNumber');
 
 export class Transaction extends Bond {
 	constructor(tx) {
@@ -251,8 +258,8 @@ export class Transaction extends Bond {
 
 {
 	var bonds = {};
-	bonds.blockNumber = new BlockNumberBond;
-	bonds.time = new SecondBond;	// TODO: pass the time through as v.
+	bonds.blockNumber = new SubscriptionBond('eth_blockNumber');
+	bonds.time = new TimeBond;	// TODO: pass the time through as v.
 	bonds.accountsInfo = new TransformBond(parity.api.parity.accountsInfo, [], [bonds.time]); //new SubscriptionBond('parity_accountsInfo');
     bonds.netChain = new TransformBond(parity.api.parity.netChain, [], [bonds.time]);
     bonds.peerCount = new TransformBond(parity.api.net.peerCount, [], [bonds.time]);
@@ -260,8 +267,8 @@ export class Transaction extends Bond {
 }
 
 Function.__proto__.bond = function(...args) { return new TransformBond(this, args); };
+Function.__proto__.timeBond = function(...args) { return new TransformBond(this, args, [parity.bonds.time]); };
 Function.__proto__.blockBond = function(...args) { return new TransformBond(this, args, [parity.bonds.blockNumber]); };
-Function.__proto__.secondBond = function(...args) { return new TransformBond(this, args, [parity.bonds.time]); };
 
 ////
 // GENERIC COMPONENTS
@@ -288,24 +295,6 @@ export class Balance extends ReactiveComponent {
 	}
 }
 
-function formatBlockNumber(n) {
-    return '#' + ('' + n).replace(/(\d)(?=(\d{3})+$)/g, "$1,");
-}
-
-export class BlockNumber extends ReactiveComponent {
-	constructor() { super(['value']); }
-
-	render() {
-        let classes = this.props.classes === null ? '_blocknumber' : this.props.classes;
-        let undefClasses = this.props.undefClasses === null ? '_blocknumber _undefined' : this.props.undefClasses;
-        let undefContent = this.props.undefContent === null ? '?' : this.props.undefContent;
-		if (this.state.value === null || typeof(this.state.value) == 'undefined')
-			return (<span className={undefClasses}>{undefContent}</span>);
-		var a = ('' + this.state.value).replace(/(\d)(?=(\d{3})+$)/g, "$1,");
-		return <span className={classes}>#{a}</span>;
-	}
-};
-
 export class Reactive extends ReactiveComponent {
     constructor() { super(['value', 'className']); }
 
@@ -324,6 +313,43 @@ export class Reactive extends ReactiveComponent {
 	}
 }
 
+export class BlockNumber extends ReactiveComponent {
+	constructor() { super(['value']); }
+
+	render() {
+        let classes = this.props.classes === null ? '_blocknumber' : this.props.classes;
+        let undefClasses = this.props.undefClasses === null ? '_blocknumber _undefined' : this.props.undefClasses;
+        let undefContent = this.props.undefContent === null ? '?' : this.props.undefContent;
+		if (this.state.value === null || typeof(this.state.value) == 'undefined')
+			return (<span className={undefClasses}>{undefContent}</span>);
+		var a = ('' + this.state.value).replace(/(\d)(?=(\d{3})+$)/g, "$1,");
+		return <span className={classes}>#{a}</span>;
+	}
+};
+
+export class AccountIcon extends ReactiveComponent {
+	constructor() { super(['address', 'className']); }
+
+	render() {
+		if (typeof(this.state.address) == "string") {
+			return (<img
+                src={createIdentityImg(this.state.address)}
+                className={typeof(this.state.className) === 'string' ? this.state.className : ''}
+                id={this.props.id}
+                data-address-img
+            />);
+		} else {
+			return (<span className={this.props.undefClassName}>{this.props.undefContent}</span>);
+		}
+	}
+};
+AccountIcon.defaultProps = {
+  className: '_accountIcon',
+  undefClassName: '_accountIcon _undefined',
+  undefContent: '',
+  id: null
+}
+
 export class Account extends ReactiveComponent {
 	constructor() { super(['address'], {accountsInfo: parity.bonds.accountsInfo}); }
 
@@ -332,14 +358,18 @@ export class Account extends ReactiveComponent {
 			let i = this.state.accountsInfo != null ? this.state.accountsInfo[parity.api.util.toChecksumAddress(this.state.address)] : null;
 			var a = i == null ? this.state.address.substr(0, 8) + "…" + this.state.address.substr(38) : i.name;
 			return (<span className="_account">
-				<img src={createIdentityImg(this.state.address)} className={'_identigram'} data-address-img style={{marginRight: '0.5ex'}}/>
-				{a}
+				{this.props.icon ? (<img src={createIdentityImg(this.state.address)} className={'_identigram'} data-address-img style={{marginRight: '0.5ex'}}/>) : ''}
+				{this.props.text ? a : ''}
 			</span>);
 		} else {
 			return <span className="undefined _account">[null]</span>;
 		}
 	}
 };
+Account.defaultProps = {
+  icon: true,
+  text: true
+}
 
 export class RichAccount extends ReactiveComponent {
 	constructor() { super(['address']); }
@@ -374,18 +404,18 @@ class Progress extends ReactiveComponent {
 	}
 }
 
-////
-// APPLICATION
-
-const ReceipterABI = [{"constant":true,"inputs":[],"name":"endBlock","outputs":[{"name":"","type":"uint256"}],"payable":false,"type":"function"},{"constant":true,"inputs":[],"name":"total","outputs":[{"name":"","type":"uint256"}],"payable":false,"type":"function"},{"constant":true,"inputs":[{"name":"","type":"address"}],"name":"record","outputs":[{"name":"","type":"uint256"}],"payable":false,"type":"function"},{"constant":false,"inputs":[],"name":"kill","outputs":[],"payable":false,"type":"function"},{"constant":false,"inputs":[],"name":"halt","outputs":[],"payable":false,"type":"function"},{"constant":true,"inputs":[],"name":"treasury","outputs":[{"name":"","type":"address"}],"payable":false,"type":"function"},{"constant":false,"inputs":[{"name":"_recipient","type":"address"}],"name":"receiveFrom","outputs":[],"payable":true,"type":"function"},{"constant":true,"inputs":[],"name":"beginBlock","outputs":[{"name":"","type":"uint256"}],"payable":false,"type":"function"},{"constant":true,"inputs":[],"name":"isHalted","outputs":[{"name":"","type":"bool"}],"payable":false,"type":"function"},{"constant":false,"inputs":[],"name":"unhalt","outputs":[],"payable":false,"type":"function"},{"constant":true,"inputs":[],"name":"admin","outputs":[{"name":"","type":"address"}],"payable":false,"type":"function"},{"inputs":[{"name":"_admin","type":"address"},{"name":"_treasury","type":"address"},{"name":"_beginBlock","type":"uint256"},{"name":"_endBlock","type":"uint256"}],"payable":false,"type":"constructor"},{"payable":true,"type":"fallback"},{"anonymous":false,"inputs":[{"indexed":true,"name":"recipient","type":"address"},{"indexed":false,"name":"amount","type":"uint256"}],"name":"Received","type":"event"},{"anonymous":false,"inputs":[],"name":"Halted","type":"event"},{"anonymous":false,"inputs":[],"name":"Unhalted","type":"event"}];
-let Receipter = parity.api.newContract(ReceipterABI, '0x7d8D1E1859cA759934Ed9784e9c142Df5d15EEba');
-
 export class BalanceInput extends React.Component {
     constructor() {
 		super();
         this.state = { value: 1 };
 	}
 }
+
+////
+// APPLICATION
+
+const ReceipterABI = [{"constant":true,"inputs":[],"name":"endBlock","outputs":[{"name":"","type":"uint256"}],"payable":false,"type":"function"},{"constant":true,"inputs":[],"name":"total","outputs":[{"name":"","type":"uint256"}],"payable":false,"type":"function"},{"constant":true,"inputs":[{"name":"","type":"address"}],"name":"record","outputs":[{"name":"","type":"uint256"}],"payable":false,"type":"function"},{"constant":false,"inputs":[],"name":"kill","outputs":[],"payable":false,"type":"function"},{"constant":false,"inputs":[],"name":"halt","outputs":[],"payable":false,"type":"function"},{"constant":true,"inputs":[],"name":"treasury","outputs":[{"name":"","type":"address"}],"payable":false,"type":"function"},{"constant":false,"inputs":[{"name":"_recipient","type":"address"}],"name":"receiveFrom","outputs":[],"payable":true,"type":"function"},{"constant":true,"inputs":[],"name":"beginBlock","outputs":[{"name":"","type":"uint256"}],"payable":false,"type":"function"},{"constant":true,"inputs":[],"name":"isHalted","outputs":[{"name":"","type":"bool"}],"payable":false,"type":"function"},{"constant":false,"inputs":[],"name":"unhalt","outputs":[],"payable":false,"type":"function"},{"constant":true,"inputs":[],"name":"admin","outputs":[{"name":"","type":"address"}],"payable":false,"type":"function"},{"inputs":[{"name":"_admin","type":"address"},{"name":"_treasury","type":"address"},{"name":"_beginBlock","type":"uint256"},{"name":"_endBlock","type":"uint256"}],"payable":false,"type":"constructor"},{"payable":true,"type":"fallback"},{"anonymous":false,"inputs":[{"indexed":true,"name":"recipient","type":"address"},{"indexed":false,"name":"amount","type":"uint256"}],"name":"Received","type":"event"},{"anonymous":false,"inputs":[],"name":"Halted","type":"event"},{"anonymous":false,"inputs":[],"name":"Unhalted","type":"event"}];
+let Receipter = parity.api.newContract(ReceipterABI, '0x7d8D1E1859cA759934Ed9784e9c142Df5d15EEba');
 
 class ContributionPanel extends ReactiveComponent {
 	constructor() {
@@ -410,10 +440,6 @@ class ContributionPanel extends ReactiveComponent {
 			<Progress request={this.state.request}/>
 		</div>);
 	}
-}
-
-function capitalizeFirstLetter(s) {
-    return s.charAt(0).toUpperCase() + s.slice(1);
 }
 
 let contributionStatus = new TransformBond((h, b, e, c) =>
@@ -446,8 +472,6 @@ export class Manager extends ReactiveComponent {
 	handleContribute (value) {
         if (value !== null)
             this.setState({ current: new Transaction({from: web3.eth.accounts[2], to: Receipter.instance.address, value: value}) });
-        else
-            window.alert(`Invalid value to contribute: ${value}`);
 	}
 	render () {
         if (this.state.status && this.state.status.active)
@@ -466,7 +490,7 @@ export class App extends React.Component {
           <header>
             <nav className={'nav-header'}>
               <div className={'container'}>
-                <span id="logo">YOUR LOGO HERE</span>
+                <span id="logo"><AccountIcon address={Receipter.instance.address} id='logoIcon'/>SKELETON CONTRIBUTION</span>
               </div>
             </nav>
           </header>
@@ -530,7 +554,8 @@ export class App extends React.Component {
           <footer className={'page-footer'}>
             <div className={'container'}>
               <div className={'row'}>
-                All content copyright Somebody. This is based on the Skeleton Contribution DApplication by Parity Technologies, 2017. All rights reserved.
+                <h1>The Skeleton Contribution Dapplication.</h1>
+                Made with &lt;3 by the Skeleton Contribution Dapplication Authors, 2017.
               </div>
             </div>
           </footer>
@@ -540,7 +565,7 @@ export class App extends React.Component {
 /*
 <div style={{minHeight: '20em', padding: '2em'}}>
     <div>Current / Period: : <BlockNumber value={Receipter.instance.beginBlock.call.blockBond()}/> - <BlockNumber value={Receipter.instance.endBlock.call.blockBond()}/></div>
-    <div>This is your coinbase: <RichAccount address={parity.api.eth.coinbase.secondBond()}/></div>
+    <div>This is your coinbase: <RichAccount address={parity.api.eth.coinbase.timeBond()}/></div>
     <div>Your account is: <RichAccount address={'0x0048440ee17ee30817348949d2ec46647e8b6179'}/></div>
     <div>Receipter is at: <Account address={Receipter.instance.address}/></div>
 </div>
