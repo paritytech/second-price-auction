@@ -5,6 +5,7 @@
   "main": "webpack.config.js",
   "dependencies": {
     "oo7": "file:../oo7",
+    "oo7-parity": "file:../oo7-parity",
     "babel": "^6.5.2",
     "babel-core": "^6.9.1",
     "babel-loader": "^6.2.4",
