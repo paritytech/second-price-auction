@@ -1,10 +1,8 @@
 import moment from 'moment';
 import React from 'react';
-
 import RaisedButton from 'material-ui/RaisedButton';
 import TextField from 'material-ui/TextField';
-
-import {Bond, TimeBond, TransformBond} from 'oo7';
+import {TransformBond} from 'oo7';
 import {Transaction, capitalizeFirstLetter, singleton, interpretQuantity, formatBlockNumber} from 'oo7-parity';
 import {Reactive, ReactiveComponent} from 'oo7-react';
 import {AccountIcon, TransactionProgress} from 'parity-reactive-ui';
@@ -186,13 +184,10 @@ export class App extends React.Component {
     <div>Your account is: <RichAccount address={'0x0048440ee17ee30817348949d2ec46647e8b6179'}/></div>
     <div>Receipter is at: <Account address={Receipter.instance.address}/></div>
 </div>
-
 */
+
 ////
 // DEBUGGING
 
 window.Receipter = Receipter;
-window.Bond = Bond;
 window.TransformBond = TransformBond;
-
-// Exports: Balance, BlockNumber, AccountIcon, Account, RichAccount, TransactionProgress, BalanceInput
