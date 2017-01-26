@@ -10,6 +10,7 @@ import injectTapEventPlugin from 'react-tap-event-plugin';
 // http://stackoverflow.com/a/34015469/988941
 injectTapEventPlugin();
 
+// We use and dirty up the global namespace here.
 parity.bonds = setupBonds(parity.api);
 
 render(<MuiThemeProvider><App/></MuiThemeProvider>, document.getElementById('app'));
