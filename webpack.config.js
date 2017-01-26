@@ -1,7 +1,7 @@
 var path = require('path');
 
 module.exports = {
-  devTool: '#source-map',  
+  devTool: '#source-map',
   entry: {
   	app: path.resolve(__dirname, 'src/client/scripts/entry.jsx')
   },
@@ -12,6 +12,7 @@ module.exports = {
   },
   module: {
     loaders: [
+      { test: /\.jsx?$/, include: /node_modules\/oo7/, loader: "babel-loader", query: { presets: ['es2015', 'react'] } },
       { test: /\.jsx?$/, exclude: /node_modules/, loader: "babel-loader", query: { presets: ['es2015', 'react'] } },
       { test: /\.css$/, loader: 'style-loader!css-loader' },
       { test: /\.json$/, loader: 'json-loader' },
@@ -19,6 +20,7 @@ module.exports = {
     ]
   },
   resolve: {
-    extensions: ['', '.js', '.json', '.jsx'] 
+    extensions: ['', '.js', '.json', '.jsx'],
+    mainFields: ['jsnext:main', 'browser', 'main']
   }
 };

@@ -1,15 +1,32 @@
 import styles from "../style.css";
-import React from 'react';
+
 import BigNumber from 'bignumber.js';
-import {render} from 'react-dom';
 import blockies from 'blockies';
+import moment from 'moment';
+
+import {Bond, TimeBond, TransformBond} from 'oo7';
+
+import React from 'react';
+import {render} from 'react-dom';
+
 import RaisedButton from 'material-ui/RaisedButton';
 import TextField from 'material-ui/TextField';
 import {Toolbar, ToolbarGroup, ToolbarSeparator, ToolbarTitle} from 'material-ui/Toolbar';
-import moment from 'moment';
 
-function capitalizeFirstLetter(s) {
+////
+// Parity Utilities
+
+export function capitalizeFirstLetter(s) {
     return s.charAt(0).toUpperCase() + s.slice(1);
+}
+
+export function singleton(f) {
+    var instance = null;
+    return function() {
+        if (instance === null)
+            instance = f();
+        return instance;
+    }
 }
 
 export function createIdentityImg (address, scale = 8) {
@@ -20,86 +37,16 @@ export function createIdentityImg (address, scale = 8) {
     }).toDataURL();
 }
 
-class ReactiveComponent extends React.Component {
-	constructor(reactiveProps = [], extraState = {}) {
-		super();
-		this.reactiveProps = reactiveProps;
-		this.extraState = extraState;
-	}
-	componentWillMount() { this.initProps(); }
-	componentWillReceiveProps(nextProps) { this.updateProps(nextProps); }
+export const denominations = [ "wei", "Kwei", "Mwei", "Gwei", "szabo", "finney", "ether", "grand", "Mether", "Gether", "Tether", "Pether", "Eether", "Zether", "Yether", "Nether", "Dether", "Vether", "Uether" ];
 
-	initProps () {
-		this.manageProps({}, this.props);
-		let that = this;
-		Object.keys(this.extraState).forEach(f => {
-			if (this.extraState[f] instanceof Bond)
-				this.extraState[f].subscribe(a => {
-					var s = that.state || {};
-					s[f] = a;
-//					console.log(`Setting state via subscription: ${f} => ${a}`);
-					that.setState(s);
-				});
-			else if (this.extraState[f] instanceof Promise)
-				this.extraState[f].then(a => {
-					var s = that.state || {};
-					s[f] = a;
-//					console.log(`Setting state via subscription: ${f} => ${a}`);
-					that.setState(s);
-				});
-			else {
-				if (s === {})
-					s = that.state || {};
-				s[f] = this.extraState[f];
-			}
-		})
-	}
-	updateProps (nextProps) { this.manageProps(this.props, nextProps); }
-	manageProps (props, nextProps) {
-		var s = {};
-		var that = this;
-		this.reactiveProps.forEach(f => {
-//			console.log(`managing field ${f}`);
-			if (nextProps[f] !== props[f]) {
-				if (props[f] instanceof Bond)
-					props[f].drop();
-
-				if (nextProps[f] instanceof Bond)
-					nextProps[f].subscribe(a => {
-						var s = that.state || {};
-						s[f] = a;
-//						console.log(`Setting state via subscription: ${f} => ${a}`);
-						that.setState(s);
-					});
-				else if (nextProps[f] instanceof Promise)
-					nextProps[f].then(a => {
-						var s = that.state || {};
-						s[f] = a;
-//						console.log(`Setting state via subscription: ${f} => ${a}`);
-						that.setState(s);
-					});
-				else {
-					if (s === {})
-						s = this.state || {};
-					s[f] = nextProps[f];
-				}
-			}
-		});
-		if (s !== {})
-			this.setState(s);
-	}
-}
-
-const denominations = [ "wei", "Kwei", "Mwei", "Gwei", "szabo", "finney", "ether", "grand", "Mether", "Gether", "Tether", "Pether", "Eether", "Zether", "Yether", "Nether", "Dether", "Vether", "Uether" ];
-
-function denominationMultiplier(s) {
+export function denominationMultiplier(s) {
     let i = denominations.indexOf(s);
     if (i < 0)
         throw "Invalid denomination";
     return (new BigNumber(1000)).pow(i);
 }
 
-function interpretQuantity(s) {
+export function interpretQuantity(s) {
     try {
         let m = s.toLowerCase().match('([0-9,.]+) *([a-zA-Z]+)?');
         let d = denominationMultiplier(m[2] || 'ether');
@@ -115,7 +62,7 @@ function interpretQuantity(s) {
     }
 }
 
-function splitValue(a) {
+export function splitValue(a) {
 	var i = 0;
 	var a = new BigNumber('' + a);
 	if (a.gte(new BigNumber("10000000000000000")) && a.lt(new BigNumber("100000000000000000000000")) || a.eq(0))
@@ -130,10 +77,13 @@ function splitValue(a) {
 	return {base: a, denom: i};
 }
 
-function formatBlockNumber(n) {
+export function formatBlockNumber(n) {
     return '#' + ('' + n).replace(/(\d)(?=(\d{3})+$)/g, "$1,");
 }
 
+////
+// Bond
+/*
 export class Bond {
 	constructor() {
 		this.fire = [];
@@ -213,6 +163,25 @@ export class TimeBond extends Bond {
 		window.clearInterval(this.interval);
 	}
 }
+*/
+////
+// PARITY.JS EXTENSIONS
+
+export function installBonds() {
+    {
+    	var bonds = {};
+        bonds.time = new TimeBond;
+    	bonds.blockNumber = new SubscriptionBond('eth_blockNumber');
+    	bonds.accountsInfo = new TransformBond(parity.api.parity.accountsInfo, [], [bonds.time]); //new SubscriptionBond('parity_accountsInfo');
+        bonds.netChain = new TransformBond(parity.api.parity.netChain, [], [bonds.time]);
+        bonds.peerCount = new TransformBond(parity.api.net.peerCount, [], [bonds.time]);
+    	window.parity.bonds = bonds;
+    }
+
+    Function.__proto__.bond = function(...args) { return new TransformBond(this, args); };
+    Function.__proto__.timeBond = function(...args) { return new TransformBond(this, args, [parity.bonds.time]); };
+    Function.__proto__.blockBond = function(...args) { return new TransformBond(this, args, [parity.bonds.blockNumber]); };
+}
 
 // TODO: Use more generic means to check on number, ideally push notification.
 export class SubscriptionBond extends Bond {
@@ -254,24 +223,98 @@ export class Transaction extends Bond {
 }
 
 ////
-// PARITY.JS EXTENSIONS
+// GENERIC REACT/BOND COMPONENTS
 
-{
-	var bonds = {};
-	bonds.blockNumber = new SubscriptionBond('eth_blockNumber');
-	bonds.time = new TimeBond;	// TODO: pass the time through as v.
-	bonds.accountsInfo = new TransformBond(parity.api.parity.accountsInfo, [], [bonds.time]); //new SubscriptionBond('parity_accountsInfo');
-    bonds.netChain = new TransformBond(parity.api.parity.netChain, [], [bonds.time]);
-    bonds.peerCount = new TransformBond(parity.api.net.peerCount, [], [bonds.time]);
-	parity.bonds = bonds;
+export class ReactiveComponent extends React.Component {
+	constructor(reactiveProps = [], extraState = {}) {
+		super();
+		this.reactiveProps = reactiveProps;
+		this.extraState = extraState;
+	}
+	componentWillMount() { this.initProps(); }
+	componentWillReceiveProps(nextProps) { this.updateProps(nextProps); }
+
+	initProps () {
+		this.manageProps({}, this.props);
+		let that = this;
+		Object.keys(this.extraState).forEach(f => {
+			if (this.extraState[f] instanceof Bond)
+				this.extraState[f].subscribe(a => {
+					var s = that.state || {};
+					s[f] = a;
+//					console.log(`Setting state via subscription: ${f} => ${a}`);
+					that.setState(s);
+				});
+			else if (this.extraState[f] instanceof Promise)
+				this.extraState[f].then(a => {
+					var s = that.state || {};
+					s[f] = a;
+//					console.log(`Setting state via subscription: ${f} => ${a}`);
+					that.setState(s);
+				});
+			else {
+				if (s === {})
+					s = that.state || {};
+				s[f] = this.extraState[f];
+			}
+		})
+	}
+	updateProps (nextProps) { this.manageProps(this.props, nextProps); }
+	manageProps (props, nextProps) {
+		var s = {};
+		var that = this;
+		this.reactiveProps.forEach(f => {
+//			console.log(`managing field ${f}`);
+			if (nextProps[f] !== props[f]) {
+				if (props[f] instanceof Bond)
+					props[f].drop();
+
+				if (nextProps[f] instanceof Bond)
+					nextProps[f].subscribe(a => {
+						var s = that.state || {};
+						s[f] = a;
+//						console.log(`Setting state via subscription: ${f} => ${a}`);
+						that.setState(s);
+					});
+				else if (nextProps[f] instanceof Promise)
+					nextProps[f].then(a => {
+						var s = that.state || {};
+						s[f] = a;
+//						console.log(`Setting state via subscription: ${f} => ${a}`);
+						that.setState(s);
+					});
+				else {
+					if (s === {})
+						s = this.state || {};
+					s[f] = nextProps[f];
+				}
+			}
+		});
+		if (s !== {})
+			this.setState(s);
+	}
 }
 
-Function.__proto__.bond = function(...args) { return new TransformBond(this, args); };
-Function.__proto__.timeBond = function(...args) { return new TransformBond(this, args, [parity.bonds.time]); };
-Function.__proto__.blockBond = function(...args) { return new TransformBond(this, args, [parity.bonds.blockNumber]); };
+export class Reactive extends ReactiveComponent {
+    constructor() { super(['value', 'className']); }
+
+	render() {
+        let className = typeof(this.state.className) === 'function' ?
+            this.state.className(this.state.value) :
+            typeof(this.state.className) === 'string' ?
+            this.state.className :
+            '';
+        let undefClassName = this.props.undefClassName === null ? '_undefined' : this.props.undefClassName;
+        let undefContent = this.props.undefContent === null ? '?' : this.props.undefContent;
+		if (this.state.value === null || typeof(this.state.value) == 'undefined')
+			return (<span className={undefClassName}>{undefContent}</span>);
+        let a = this.props.transform ? this.props.transform(this.state.value) : this.state.value;
+		return <span className={className}>{a}</span>;
+	}
+}
 
 ////
-// GENERIC COMPONENTS
+// PARITY/REACT/BOND COMPONENTS
 
 export class Balance extends ReactiveComponent {
 	constructor() { super(['value']); }
@@ -292,24 +335,6 @@ export class Balance extends ReactiveComponent {
 				</span>
 			</span>
 		);
-	}
-}
-
-export class Reactive extends ReactiveComponent {
-    constructor() { super(['value', 'className']); }
-
-	render() {
-        let className = typeof(this.state.className) === 'function' ?
-            this.state.className(this.state.value) :
-            typeof(this.state.className) === 'string' ?
-            this.state.className :
-            '';
-        let undefClassName = this.props.undefClassName === null ? '_undefined' : this.props.undefClassName;
-        let undefContent = this.props.undefContent === null ? '?' : this.props.undefContent;
-		if (this.state.value === null || typeof(this.state.value) == 'undefined')
-			return (<span className={undefClassName}>{undefContent}</span>);
-        let a = this.props.transform ? this.props.transform(this.state.value) : this.state.value;
-		return <span className={className}>{a}</span>;
 	}
 }
 
@@ -383,7 +408,7 @@ export class RichAccount extends ReactiveComponent {
 	}
 };
 
-class Progress extends ReactiveComponent {
+export class TransactionProgress extends ReactiveComponent {
 	constructor() {
 		super(['request']);
 	}
@@ -437,12 +462,12 @@ class ContributionPanel extends ReactiveComponent {
 				onClick={()=>{ this.props.onContribute(this.state.value); }}
 				disabled={this.state.value === null || (this.state.request != null && !this.state.request.failed && !this.state.request.confirmed)}
 			/>
-			<Progress request={this.state.request}/>
+			<TransactionProgress request={this.state.request}/>
 		</div>);
 	}
 }
 
-let contributionStatus = new TransformBond((h, b, e, c) =>
+let contributionStatus = singleton(() => new TransformBond((h, b, e, c) =>
     c < b ? { before: { start: b, after: b - c } } :
     c >= e ? { after: { end: e, ago: c - e } } :
     h ? { halted: {} } :
@@ -452,7 +477,7 @@ let contributionStatus = new TransformBond((h, b, e, c) =>
     Receipter.instance.beginBlock.call(),
     Receipter.instance.endBlock.call(),
     parity.bonds.blockNumber
-]);
+]));
 
 function niceStatus(s) {
     let blocksToTime = blocks => moment.unix(0).to(moment.unix(blocks * 15));
@@ -462,11 +487,11 @@ function niceStatus(s) {
         `Open for another ${blocksToTime(s.active.have).replace('in ', '')}`;
 }
 
-let contributionTotal = Receipter.instance.total.call.blockBond();
+let contributionTotal = singleton(() => Receipter.instance.total.call.blockBond());
 
 export class Manager extends ReactiveComponent {
 	constructor() {
-		super([], { status: contributionStatus });
+		super([], { status: contributionStatus() });
 		this.state = { current: null };
 	}
 	handleContribute (value) {
@@ -523,11 +548,11 @@ export class App extends React.Component {
                         <div className={'title'}>Contribution<br />Summary</div>
                         <div className={'field'}>
                           <div>Status</div>
-                          <Reactive value={contributionStatus.map(niceStatus)} className={contributionStatus.map(s => '_fieldValue ' + (s.active ? '_active' : s.before ? '_before' : '_after'))} />
+                          <Reactive value={contributionStatus().map(niceStatus)} className={contributionStatus().map(s => '_fieldValue ' + (s.active ? '_active' : s.before ? '_before' : '_after'))} />
                         </div>
                         <div className={'field'}>
                           <div>Received</div>
-                          <Reactive value={contributionTotal.map(c => `${+c.div(1000000000000000) / 1000} ETH`)} className='_fieldValue _basic' />
+                          <Reactive value={contributionTotal().map(c => `${+c.div(1000000000000000) / 1000} ETH`)} className='_fieldValue _basic' />
                         </div>
                       </div>
                     </div>
