@@ -4,10 +4,13 @@
   "description": "Contribution dapp",
   "main": "webpack.config.js",
   "dependencies": {
-    "oo7": "^0.1.1",
-    "oo7-parity": "^0.1.1",
-    "oo7-react": "^0.1.1",
-    "parity-reactive-ui": "^0.1.2",
+    "oo7": "file:../oo7",
+    "oo7-parity": "file:../oo7-parity",
+    "oo7-react": "file:../oo7-react",
+    "parity-reactive-ui": "file:../parity-reactive-ui",
+
+
+    
     "babel": "^6.5.2",
     "babel-core": "^6.9.1",
     "babel-loader": "^6.2.4",
