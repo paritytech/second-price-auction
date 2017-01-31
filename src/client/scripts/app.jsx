@@ -2,6 +2,7 @@ import moment from 'moment';
 import React from 'react';
 import RaisedButton from 'material-ui/RaisedButton';
 import TextField from 'material-ui/TextField';
+import Checkbox from 'material-ui/Checkbox';
 import {TransformBond} from 'oo7';
 import {Transaction, capitalizeFirstLetter, singleton, interpretQuantity, formatBlockNumber} from 'oo7-parity';
 import {Reactive, ReactiveComponent} from 'oo7-react';
@@ -9,8 +10,13 @@ import {AccountIcon, TransactionProgress} from 'parity-reactive-ui';
 
 import styles from "../style.css";
 
+let bonds = parity.bonds;
+
 const ReceipterABI = [{"constant":false,"inputs":[{"name":"v","type":"uint8"},{"name":"r","type":"bytes32"},{"name":"s","type":"bytes32"}],"name":"receive","outputs":[],"payable":true,"type":"function"},{"constant":true,"inputs":[],"name":"endBlock","outputs":[{"name":"","type":"uint256"}],"payable":false,"type":"function"},{"constant":true,"inputs":[],"name":"total","outputs":[{"name":"","type":"uint256"}],"payable":false,"type":"function"},{"constant":true,"inputs":[{"name":"","type":"address"}],"name":"record","outputs":[{"name":"","type":"uint256"}],"payable":false,"type":"function"},{"constant":false,"inputs":[],"name":"kill","outputs":[],"payable":false,"type":"function"},{"constant":false,"inputs":[],"name":"halt","outputs":[],"payable":false,"type":"function"},{"constant":true,"inputs":[],"name":"treasury","outputs":[{"name":"","type":"address"}],"payable":false,"type":"function"},{"constant":false,"inputs":[{"name":"_recipient","type":"address"}],"name":"receiveFrom","outputs":[],"payable":true,"type":"function"},{"constant":true,"inputs":[],"name":"beginBlock","outputs":[{"name":"","type":"uint256"}],"payable":false,"type":"function"},{"constant":false,"inputs":[{"name":"_source","type":"address"},{"name":"v","type":"uint8"},{"name":"r","type":"bytes32"},{"name":"s","type":"bytes32"}],"name":"receiveFrom","outputs":[],"payable":true,"type":"function"},{"constant":true,"inputs":[],"name":"isHalted","outputs":[{"name":"","type":"bool"}],"payable":false,"type":"function"},{"constant":false,"inputs":[],"name":"unhalt","outputs":[],"payable":false,"type":"function"},{"constant":true,"inputs":[],"name":"admin","outputs":[{"name":"","type":"address"}],"payable":false,"type":"function"},{"constant":true,"inputs":[],"name":"dust","outputs":[{"name":"","type":"uint256"}],"payable":false,"type":"function"},{"inputs":[{"name":"_admin","type":"address"},{"name":"_treasury","type":"address"},{"name":"_beginBlock","type":"uint256"},{"name":"_endBlock","type":"uint256"},{"name":"_sigHash","type":"bytes32"}],"payable":false,"type":"constructor"},{"payable":true,"type":"fallback"},{"anonymous":false,"inputs":[{"indexed":true,"name":"recipient","type":"address"},{"indexed":false,"name":"amount","type":"uint256"}],"name":"Received","type":"event"},{"anonymous":false,"inputs":[],"name":"Halted","type":"event"},{"anonymous":false,"inputs":[],"name":"Unhalted","type":"event"}];
 let Receipter = parity.api.bonds.makeContract(ReceipterABI, '0xa1B844658F861A360a1232162eE8bAA70AAeB2b0');
+
+const message = 'Take the money and spend it as you see fit';
+
 
 class ContributionPanel extends ReactiveComponent {
 	constructor() {
@@ -46,7 +52,7 @@ let contributionStatus = singleton(() => new TransformBond((h, b, e, c) =>
     Receipter.isHalted(),
     Receipter.beginBlock(),
     Receipter.endBlock(),
-    parity.bonds.blockNumber
+    bonds.blockNumber
 ]));
 
 function niceStatus(s) {
@@ -59,22 +65,63 @@ function niceStatus(s) {
 
 let contributionTotal = singleton(() => Receipter.total());
 
+class TermsPanel extends ReactiveComponent {
+	constructor() {
+		super(['request']);
+		this.state = { request: null };
+	}
+	render() {
+		return (
+			<Checkbox
+				label='I agree to all terms and conditions. Please accept my contribution.'
+				checked={this.state.request && !!this.state.request.signed}
+				disabled={this.state.request && !!this.state.request.requested}
+				onCheck={ (_, c) => { if (c) this.props.onRequest(); } }
+				iconStyle={{width: '4em', height: '4em'}}
+				labelStyle={{fontSize: '3em', lineHeight: 'normal'}}
+			/>
+		);
+	}
+}
+
+function splitSignature(vrs) {
+	return [vrs.substr(0, 4), `0x${vrs.substr(4, 68)}`, `0x${vrs.substr(68)}`];
+}
+
 class Manager extends ReactiveComponent {
 	constructor() {
 		super([], { status: contributionStatus() });
-		this.state = { current: null };
+		this.state = { signing: null, contribution: null };
+	}
+	handleSign () {
+		this.setState({
+			signing: new Signature(bonds.accounts[2], message),
+			contribution: this.state.contribution
+		});
 	}
 	handleContribute (value) {
-        if (value !== null)
-            this.setState({ current: Receipter.new Transaction({from: web3.eth.accounts[2], to: Receipter.instance.address, value: value}) });
+        if (value !== null) {
+			this.setState({
+				signing: this.state.signing,
+				contribution: Receipter.receive(...splitSignature(this.state.signing.signed.signature), { from: bonds.accounts[2], value })
+			});
+		}
 	}
 	render () {
-        return (this.state.status && this.state.status.active) ?
-          (<ContributionPanel
-            request={this.state.current}
-            onContribute={this.handleContribute.bind(this)}
-          />) :
-          (<h2>Contribution period not active</h2>);
+        return (this.state.status && this.state.status.active)
+          ? (
+			<div>
+				<TermsPanel
+				  request={this.state.signing}
+	  			  onRequest={this.handleSign.bind(this)}
+				/>
+			    <ContributionPanel
+	              request={this.state.current}
+	              onContribute={this.handleContribute.bind(this)}
+	            />
+			</div>
+		  )
+		  : (<h2>Contribution period not active</h2>);
 	}
 }
 
@@ -109,21 +156,21 @@ export class App extends React.Component {
                         <div className={'field'}>
                           <div>Status</div>
                           <Reactive
-                            value={parity.bonds.peerCount.map(c => c > 0 ? '● Online' : '○ Offline')}
-                            className={parity.bonds.peerCount.map(c => '_fieldValue ' + (c > 0 ? '_online' : '_offline'))}
+                            value={bonds.peerCount.map(c => c > 0 ? '● Online' : '○ Offline')}
+                            className={bonds.peerCount.map(c => '_fieldValue ' + (c > 0 ? '_online' : '_offline'))}
                           />
                         </div>
                         <div className={'field'}>
                           <div>Network</div>
                           <Reactive
-                            value={parity.bonds.netChain.map(capitalizeFirstLetter)}
-                            className={parity.bonds.netChain.map(c => '_fieldValue _' + c)}
+                            value={bonds.netChain.map(capitalizeFirstLetter)}
+                            className={bonds.netChain.map(c => '_fieldValue _' + c)}
                           />
                         </div>
                         <div className={'field'}>
                           <div>Number</div>
                           <Reactive
-                            value={parity.bonds.blockNumber.map(formatBlockNumber)}
+                            value={bonds.blockNumber.map(formatBlockNumber)}
                             className='_fieldValue _basic'
                           />
                         </div>
