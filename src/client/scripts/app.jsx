@@ -9,8 +9,8 @@ import {AccountIcon, TransactionProgress} from 'parity-reactive-ui';
 
 import styles from "../style.css";
 
-const ReceipterABI = [{"constant":true,"inputs":[],"name":"endBlock","outputs":[{"name":"","type":"uint256"}],"payable":false,"type":"function"},{"constant":true,"inputs":[],"name":"total","outputs":[{"name":"","type":"uint256"}],"payable":false,"type":"function"},{"constant":true,"inputs":[{"name":"","type":"address"}],"name":"record","outputs":[{"name":"","type":"uint256"}],"payable":false,"type":"function"},{"constant":false,"inputs":[],"name":"kill","outputs":[],"payable":false,"type":"function"},{"constant":false,"inputs":[],"name":"halt","outputs":[],"payable":false,"type":"function"},{"constant":true,"inputs":[],"name":"treasury","outputs":[{"name":"","type":"address"}],"payable":false,"type":"function"},{"constant":false,"inputs":[{"name":"_recipient","type":"address"}],"name":"receiveFrom","outputs":[],"payable":true,"type":"function"},{"constant":true,"inputs":[],"name":"beginBlock","outputs":[{"name":"","type":"uint256"}],"payable":false,"type":"function"},{"constant":true,"inputs":[],"name":"isHalted","outputs":[{"name":"","type":"bool"}],"payable":false,"type":"function"},{"constant":false,"inputs":[],"name":"unhalt","outputs":[],"payable":false,"type":"function"},{"constant":true,"inputs":[],"name":"admin","outputs":[{"name":"","type":"address"}],"payable":false,"type":"function"},{"inputs":[{"name":"_admin","type":"address"},{"name":"_treasury","type":"address"},{"name":"_beginBlock","type":"uint256"},{"name":"_endBlock","type":"uint256"}],"payable":false,"type":"constructor"},{"payable":true,"type":"fallback"},{"anonymous":false,"inputs":[{"indexed":true,"name":"recipient","type":"address"},{"indexed":false,"name":"amount","type":"uint256"}],"name":"Received","type":"event"},{"anonymous":false,"inputs":[],"name":"Halted","type":"event"},{"anonymous":false,"inputs":[],"name":"Unhalted","type":"event"}];
-let Receipter = parity.api.newContract(ReceipterABI, '0x7d8D1E1859cA759934Ed9784e9c142Df5d15EEba');
+const ReceipterABI = [{"constant":false,"inputs":[{"name":"v","type":"uint8"},{"name":"r","type":"bytes32"},{"name":"s","type":"bytes32"}],"name":"receive","outputs":[],"payable":true,"type":"function"},{"constant":true,"inputs":[],"name":"endBlock","outputs":[{"name":"","type":"uint256"}],"payable":false,"type":"function"},{"constant":true,"inputs":[],"name":"total","outputs":[{"name":"","type":"uint256"}],"payable":false,"type":"function"},{"constant":true,"inputs":[{"name":"","type":"address"}],"name":"record","outputs":[{"name":"","type":"uint256"}],"payable":false,"type":"function"},{"constant":false,"inputs":[],"name":"kill","outputs":[],"payable":false,"type":"function"},{"constant":false,"inputs":[],"name":"halt","outputs":[],"payable":false,"type":"function"},{"constant":true,"inputs":[],"name":"treasury","outputs":[{"name":"","type":"address"}],"payable":false,"type":"function"},{"constant":false,"inputs":[{"name":"_recipient","type":"address"}],"name":"receiveFrom","outputs":[],"payable":true,"type":"function"},{"constant":true,"inputs":[],"name":"beginBlock","outputs":[{"name":"","type":"uint256"}],"payable":false,"type":"function"},{"constant":false,"inputs":[{"name":"_source","type":"address"},{"name":"v","type":"uint8"},{"name":"r","type":"bytes32"},{"name":"s","type":"bytes32"}],"name":"receiveFrom","outputs":[],"payable":true,"type":"function"},{"constant":true,"inputs":[],"name":"isHalted","outputs":[{"name":"","type":"bool"}],"payable":false,"type":"function"},{"constant":false,"inputs":[],"name":"unhalt","outputs":[],"payable":false,"type":"function"},{"constant":true,"inputs":[],"name":"admin","outputs":[{"name":"","type":"address"}],"payable":false,"type":"function"},{"constant":true,"inputs":[],"name":"dust","outputs":[{"name":"","type":"uint256"}],"payable":false,"type":"function"},{"inputs":[{"name":"_admin","type":"address"},{"name":"_treasury","type":"address"},{"name":"_beginBlock","type":"uint256"},{"name":"_endBlock","type":"uint256"},{"name":"_sigHash","type":"bytes32"}],"payable":false,"type":"constructor"},{"payable":true,"type":"fallback"},{"anonymous":false,"inputs":[{"indexed":true,"name":"recipient","type":"address"},{"indexed":false,"name":"amount","type":"uint256"}],"name":"Received","type":"event"},{"anonymous":false,"inputs":[],"name":"Halted","type":"event"},{"anonymous":false,"inputs":[],"name":"Unhalted","type":"event"}];
+let Receipter = parity.api.bonds.makeContract(ReceipterABI, '0xa1B844658F861A360a1232162eE8bAA70AAeB2b0');
 
 class ContributionPanel extends ReactiveComponent {
 	constructor() {
@@ -43,9 +43,9 @@ let contributionStatus = singleton(() => new TransformBond((h, b, e, c) =>
     h ? { halted: {} } :
     { active: { done: c - b, have: e - c } }
 , [
-    Receipter.instance.isHalted.call.bond(),
-    Receipter.instance.beginBlock.call(),
-    Receipter.instance.endBlock.call(),
+    Receipter.isHalted(),
+    Receipter.beginBlock(),
+    Receipter.endBlock(),
     parity.bonds.blockNumber
 ]));
 
@@ -57,7 +57,7 @@ function niceStatus(s) {
         `Open for another ${blocksToTime(s.active.have).replace('in ', '')}`;
 }
 
-let contributionTotal = singleton(() => Receipter.instance.total.call.blockBond());
+let contributionTotal = singleton(() => Receipter.total());
 
 class Manager extends ReactiveComponent {
 	constructor() {
@@ -66,7 +66,7 @@ class Manager extends ReactiveComponent {
 	}
 	handleContribute (value) {
         if (value !== null)
-            this.setState({ current: new Transaction({from: web3.eth.accounts[2], to: Receipter.instance.address, value: value}) });
+            this.setState({ current: Receipter.new Transaction({from: web3.eth.accounts[2], to: Receipter.instance.address, value: value}) });
 	}
 	render () {
         return (this.state.status && this.state.status.active) ?
@@ -88,7 +88,7 @@ export class App extends React.Component {
             <nav className={'nav-header'}>
               <div className={'container'}>
                 <span id="logo">
-                  <AccountIcon address={Receipter.instance.address} id='logoIcon'/>
+                  <AccountIcon address={Receipter.address} id='logoIcon'/>
                   SKELETON CONTRIBUTION
                 </span>
               </div>
