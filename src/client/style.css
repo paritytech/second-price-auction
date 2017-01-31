@@ -152,7 +152,7 @@ div#contributionPanel > * {
 }
 
 .contrib-main section {
-  padding: 2em 14em;
+  padding: 1em 14em;
   color: #222;
 }
 
@@ -161,7 +161,8 @@ div#contributionPanel > * {
   font-size: 36px;
   font-weight: 200;
   text-align: center;
-  margin-bottom: 48px;
+  margin-top: 1em;
+  margin-bottom: 1em;
 }
 
 .contrib-main section h2 {
@@ -299,6 +300,10 @@ div.withdraw div.card-label {
 	color: #88f;
 }
 
+.bigCheckbox {
+    margin-top: 3em;
+}
+
 .button {
     display: inline-block;
     margin: 10px;
@@ -410,35 +415,35 @@ img#logoIcon {
 	color: #888;
 }
 
-span._online {
+._online {
 	color: #8f8;
 }
 
-span._offline {
+._offline {
 	color: #888;
 }
 
-span._ropsten {
+._ropsten {
 	color: #88f;
 }
 
-span._homestead {
+._homestead {
 	color: #fff;
 }
 
-span._fieldValue {
+._fieldValue {
 	font-weight: bold;
 }
-span._fieldValue._basic {
+._fieldValue._basic {
 	color: #ddd;
 }
-span._fieldValue._active {
+._fieldValue._active {
 	color: #8f8;
 }
-span._fieldValue._before {
+._fieldValue._before {
 	color: #aa8;
 }
-span._fieldValue._after {
+._fieldValue._after {
 	color: #88f;
 }
 
