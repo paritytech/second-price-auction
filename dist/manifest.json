@@ -1,8 +1,8 @@
 {
-	"id": "contribution",
-	"name": "Contribution",
-	"description": "A contribution dapp",
+	"id": "dutch-contribution",
+	"name": "Polkadot Contribution",
+	"description": "The Polkadot Dutch-auction",
 	"version": "0.1",
-	"author": "CNF",
+	"author": "Parity Technologies",
 	"iconUrl": "title.png"
 }

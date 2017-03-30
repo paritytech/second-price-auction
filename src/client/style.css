@@ -125,7 +125,7 @@ div#status-title {
   text-align: center;
   text-shadow: 0 1px 1px black;
   font-size: 20px;
-  padding-top: 8px;
+  margin-top: -24px;
 }
 
 div#status-title > h1 {
@@ -423,7 +423,7 @@ img#logoIcon {
 	color: #888;
 }
 
-._ropsten {
+._ropsten, ._kovan {
 	color: #88f;
 }
 
