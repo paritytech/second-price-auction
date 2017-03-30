@@ -1,4 +1,4 @@
-# Skeleton dapp.
+# Dutch contribution dapp.
 
 To install:
 
@@ -14,4 +14,3 @@ webpack --watch
 ```
 
 Files will be build into `dist/`. Just symlink that dir into your dapps path.
-

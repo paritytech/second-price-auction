@@ -1,16 +1,13 @@
 {
-  "name": "contribution",
+  "name": "dutch-contribution",
   "version": "0.1.0",
-  "description": "Contribution dapp",
+  "description": "Dutch contribution dapp",
   "main": "webpack.config.js",
   "dependencies": {
-    "oo7": "^0.1.2",
-    "oo7-parity": "^0.1.2",
-    "oo7-react": "^0.1.2",
-    "parity-reactive-ui": "^0.1.2",
-
-
-
+    "oo7": "^0.1.6",
+    "oo7-parity": "^0.1.6",
+    "oo7-react": "^0.1.6",
+    "parity-reactive-ui": "^0.1.6",
     "babel": "^6.5.2",
     "babel-core": "^6.9.1",
     "babel-loader": "^6.2.4",
@@ -24,6 +21,10 @@
     "json-loader": "^0.5.4",
     "material-ui": "^0.16.7",
     "moment": "^2.17.1",
+    "oo7": "file:../oo7",
+    "oo7-parity": "file:../oo7-parity",
+    "oo7-react": "file:../oo7-react",
+    "parity-reactive-ui": "file:../parity-reactive-ui",
     "react": "^15.1.0",
     "react-addons-css-transition-group": "^15.4.2",
     "react-dom": "^15.1.0",
@@ -32,6 +33,7 @@
     "react-tools": "^0.10.0",
     "react-tooltip": "^2.0.3",
     "style-loader": "^0.13.1",
+    "vague-time": "^2.4.0",
     "webpack": "^1.13.1",
     "webpack-dev-server": "^1.14.1"
   },
