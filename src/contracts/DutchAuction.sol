@@ -53,7 +53,7 @@ contract DutchAuction {
 
 		// if we've asked for too many, we should send back the extra.
 		if (tokens > available) {
-			refund = (tokens - available) * price;
+			refund = msg.value - available * price;
 			accepted -= refund;
 		}
 
