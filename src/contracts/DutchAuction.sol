@@ -17,8 +17,13 @@ contract Certifier {
 /// until all tokens are sold at the current price with currently received
 /// funds.
 contract DutchAuction {
+	// Events:
+
 	/// Someone bought in at a particular max-price.
 	event Buyin(address indexed who, uint accepted, uint refund, uint price, uint bonus);
+
+	/// Admin injected a purchase.
+	event Injected(address indexed who, uint value);
 
 	/// The sale just ended with the current price.
 	event Ended(uint price);
@@ -28,6 +33,8 @@ contract DutchAuction {
 
 	/// Auction is over. All accounts finalised.
 	event Retired();
+
+	// Constructor:
 
 	/// Simple constructor.
 	function DutchAuction(address _tokenContract, address _treasury, address _admin, uint _beginTime, uint _beginPrice, uint _saleSpeed, uint _tokenCap) {
@@ -40,6 +47,8 @@ contract DutchAuction {
 		tokenCap = _tokenCap;
 		endTime = beginTime + beginPrice / saleSpeed;
 	}
+
+	// Public interaction:
 
 	/// Buyin function. Throws if the sale is not active. May refund some of the
 	/// funds if they would end the sale.
@@ -96,6 +105,21 @@ contract DutchAuction {
 		}
 	}
 
+	// Admin interaction:
+
+	/// Like buyin except no payment required.
+	function inject(address _who, uint _value) only_admin {
+		participants[_who] += _value;
+
+		totalReceived += _value;
+		uint targetPrice = totalReceived / tokenCap;
+		uint salePriceDrop = beginPrice - targetPrice;
+		uint saleDuration = salePriceDrop / saleSpeed;
+		endTime = beginTime + saleDuration;
+
+		Injected(_who, _value);
+	}
+
 	/// Emergency function to pause buy-in and finalisation.
 	function setHalted(bool _halted) only_admin { halted = _halted; }
 
@@ -104,6 +128,8 @@ contract DutchAuction {
 
 	/// Kill this contract once the sale is finished.
 	function kill() when_all_finalised { suicide(admin); }
+
+	// Inspection:
 
 	/// The current price for a single token. If a buyin happens now, this is
 	/// the highest price per token that the buyer will pay. This doesn't
@@ -130,21 +156,24 @@ contract DutchAuction {
 	/// spend `_value` now. Also tell you what `refund` would be given, if any.
 	function theDeal(uint _value, address _who)
 		constant
-		returns (uint tokens, uint refund, uint price, uint bonus)
+		returns (uint accepted, uint refund, uint price, uint bonus)
 	{
 		if (!isActive()) return;
 		bonus = this.bonus(_value, _who);
-		_value += bonus;
 		price = currentPrice();
-		uint accepted = _value;
+		accepted = _value + bonus;
 		uint available = tokensAvailable();
-		tokens = _value / price;
+		uint tokens = accepted / price;
 		refund = 0;
 
 		// if we've asked for too many, we should send back the extra.
 		if (tokens > available) {
-			refund = _value - available * price;
-			accepted -= refund;
+			// only accept enough of it to make sense.
+			accepted = available * price;
+			if (_value > accepted) {
+				// bonus doesn't count in the refund.
+				refund = _value - accepted;
+			}
 		}
 	}
 
@@ -169,6 +198,8 @@ contract DutchAuction {
 
 	/// True if all participants have finalised.
 	function allFinalised() constant returns (bool) { return now >= endTime && totalReceived == totalFinalised; }
+
+	// Modifiers:
 
 	/// Ensure the sale is ongoing.
 	modifier when_active { if (isActive()) _; else throw; }
@@ -253,17 +284,17 @@ contract DutchAuction {
 	/// The statement which should be signed.
 	string constant public STATEMENT = "\x19Ethereum Signed Message:\n47Please take my Ether and try to build Polkadot.";
 
-	/// Statement to actually sign.
-	/// ```js
-	/// function statement() { STATEMENT().map(s => s.substr(28)) }
-	/// ```
+	//# Statement to actually sign.
+	//# ```js
+	//# statement = function() { this.STATEMENT().map(s => s.substr(28)) }
+	//# ```
 
-	/// Percentage extra given for discounted purchases.
+	/// Percentage of the purchase that is free during bonus period.
 	uint constant public BONUS_SIZE = 10;
 
-	/// Maxiumum amount of Ether per unique person prior during power hour.
+	/// Maxiumum amount of Ether per unique person that counts for bonus.
 	uint constant public BONUS_LIMIT = 100 ether;
 
-	/// Duration after sale begins that discount is given.
+	/// Duration after sale begins that bonus is active.
 	uint constant public BONUS_DURATION = 1 hours;
 }
