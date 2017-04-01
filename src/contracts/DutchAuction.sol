@@ -22,6 +22,9 @@ contract DutchAuction {
 	/// Someone bought in at a particular max-price.
 	event Buyin(address indexed who, uint accepted, uint refund, uint price, uint bonus);
 
+	/// Admin injected a purchase.
+	event Injected(address indexed who, uint value);
+
 	/// The sale just ended with the current price.
 	event Ended(uint price);
 
@@ -104,6 +107,19 @@ contract DutchAuction {
 
 	// Admin interaction:
 
+	/// Like buyin except no payment required.
+	function inject(address _who, uint _value) only_admin {
+		participants[_who] += _value;
+
+		totalReceived += _value;
+		uint targetPrice = totalReceived / tokenCap;
+		uint salePriceDrop = beginPrice - targetPrice;
+		uint saleDuration = salePriceDrop / saleSpeed;
+		endTime = beginTime + saleDuration;
+
+		Injected(_who, _value);
+	}
+
 	/// Emergency function to pause buy-in and finalisation.
 	function setHalted(bool _halted) only_admin { halted = _halted; }
 
@@ -140,21 +156,24 @@ contract DutchAuction {
 	/// spend `_value` now. Also tell you what `refund` would be given, if any.
 	function theDeal(uint _value, address _who)
 		constant
-		returns (uint tokens, uint refund, uint price, uint bonus)
+		returns (uint accepted, uint refund, uint price, uint bonus)
 	{
 		if (!isActive()) return;
 		bonus = this.bonus(_value, _who);
-		_value += bonus;
 		price = currentPrice();
-		uint accepted = _value;
+		accepted = _value + bonus;
 		uint available = tokensAvailable();
-		tokens = _value / price;
+		uint tokens = accepted / price;
 		refund = 0;
 
 		// if we've asked for too many, we should send back the extra.
 		if (tokens > available) {
-			refund = _value - available * price;
-			accepted -= refund;
+			// only accept enough of it to make sense.
+			accepted = available * price;
+			if (_value > accepted) {
+				// bonus doesn't count in the refund.
+				refund = _value - accepted;
+			}
 		}
 	}
 

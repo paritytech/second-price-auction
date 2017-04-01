@@ -15,4 +15,7 @@ parity.api.abi = abiPolyfill();
 // We use and dirty up the global namespace here.
 parity.bonds = setupBonds(parity.api);
 
+// Polyfill until it gets into oo7-parity.js
+parity.bonds.me = parity.bonds.defaultAccount;
+
 render(<MuiThemeProvider><App/></MuiThemeProvider>, document.getElementById('app'));

@@ -14,7 +14,8 @@ import {DutchAuctionABI} from './abis.jsx';
 function formatBalance(c) { return `${+c.div(1000000000000000000)} ETH`; }
 
 //var DutchAuction = singleton(() => parity.bonds.makeContract('0x740C644B44d2B46EbDA31E6F87e3f4cA62120e0A', DutchAuctionABI));
-var DutchAuction = singleton(() => parity.bonds.makeContract('0x856EDD7F20d39f6Ef560a7B118a007A9Bc5CAbfD', DutchAuctionABI));
+//var DutchAuction = singleton(() => parity.bonds.makeContract('0x856EDD7F20d39f6Ef560a7B118a007A9Bc5CAbfD', DutchAuctionABI));
+var DutchAuction = singleton(() => parity.bonds.makeContract('0x36E6cb0515c6665F8135BF37Ec61ceBDE0CC86f3', DutchAuctionABI));
 //var DutchAuction = singleton(() => parity.bonds.makeContract('0xe643110fBa0b7a72BA454B0AE98c5Cb6345fe34A', DutchAuctionABI));
 
 class ContributionPanel extends ReactiveComponent {
@@ -24,6 +25,7 @@ class ContributionPanel extends ReactiveComponent {
         this.state = { valueRaw: d, value: interpretQuantity(d) };
 	}
 	render () {
+		console.log(`request: ${JSON.stringify(this.state.request)}`);
 		return (<div id="contributionPanel">
 			<TextField
                 floatingLabelText="How much to spend?"
@@ -33,7 +35,15 @@ class ContributionPanel extends ReactiveComponent {
                 onChange={(e, v) => { this.setState({valueRaw: v, value: interpretQuantity(v)}); }}
 				disabled={!this.state.signature}
 			/>
-			<p style={{textAlign: 'center', margin: '1em 2em'}}>By spending <Rspan>{formatBalance(this.state.value)}</Rspan> now, you will receive <b>at least <Rspan>{DutchAuction().currentPrice().map(p => Math.floor(+this.state.value / p))}</Rspan></b> DOT tokens, paying <b>at most <Rspan>{DutchAuction().currentPrice().map(formatBalance)}</Rspan></b> per DOT</p>
+			<p style={{textAlign: 'center', margin: '1em 2em'}}>
+				By spending <Rspan>{
+					formatBalance(this.state.value)
+				}</Rspan> now, you will receive <b>
+					at least <Rspan>{
+						DutchAuction().theDeal(this.state.value, parity.bonds.me).map(([accepted, r, price, bonus]) => Math.floor(accepted / price))
+					}</Rspan>
+				</b> DOT tokens
+			</p>
 			<RaisedButton
 				label="spend"
 				onClick={()=>{ this.props.onContribute(this.state.value, this.state.signature); }}
@@ -93,9 +103,10 @@ class Manager extends ReactiveComponent {
 		});
 	}
 	handleContribute (value, signature) {
+		console.log(`handleContrib: value: ${value}, sig: ${signature}`);
 		this.setState({
 			signing: this.state.signing,
-			contribution: DutchAuction().buyin(...splitSignature(signature), { from: parity.bonds.accounts[0], value })
+			contribution: DutchAuction().buyin(...splitSignature(signature), { from: parity.bonds.me, value })
 		});
 	}
 	render () {
@@ -113,7 +124,7 @@ class Manager extends ReactiveComponent {
 			  <section id="action">
 				<h1>Send Funds</h1>
 				<ContributionPanel
-				  signature={this.state.signing ? this.state.signing.signed : null}
+				  signature={this.state.signing ? this.state.signing.map(s => s.signed || null) : null}
 	              request={this.state.contribution}
 	              onContribute={this.handleContribute.bind(this)}
 	            />
