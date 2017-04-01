@@ -8,12 +8,17 @@ contract Token {
 	function transfer(address _to, uint256 _value) returns (bool success);
 }
 
+/// Stripped Badge token interface.
+contract Certifier {
+	function certified(address _who) constant returns (bool);
+}
+
 /// Simple Dutch Auction contract. Price starts high and monotonically decreases
 /// until all tokens are sold at the current price with currently received
 /// funds.
 contract DutchAuction {
 	/// Someone bought in at a particular max-price.
-	event Buyin(address indexed who, uint price, uint spent, uint refund);
+	event Buyin(address indexed who, uint accepted, uint refund, uint price, uint bonus);
 
 	/// The sale just ended with the current price.
 	event Ended(uint price);
@@ -45,17 +50,11 @@ contract DutchAuction {
 		avoid_dust
 		only_signed(msg.sender, v, r, s)
 	{
-		uint price = currentPrice();
-		uint tokens = msg.value / price;
-		uint refund = 0;
-		uint accepted = msg.value;
-		uint available = tokensAvailable();
-
-		// if we've asked for too many, we should send back the extra.
-		if (tokens > available) {
-			refund = msg.value - available * price;
-			accepted -= refund;
-		}
+		uint accepted;
+		uint refund;
+		uint price;
+		uint bonus;
+		(accepted, refund, price, bonus) = theDeal(msg.value, msg.sender);
 
 		// record the acceptance.
 		participants[msg.sender] += accepted;
@@ -64,7 +63,7 @@ contract DutchAuction {
 		uint salePriceDrop = beginPrice - targetPrice;
 		uint saleDuration = salePriceDrop / saleSpeed;
 		endTime = beginTime + saleDuration;
-		Buyin(msg.sender, price, accepted, refund);
+		Buyin(msg.sender, accepted, refund, price, bonus);
 
 		// send to treasury
 		if (!treasury.send(accepted)) throw;
@@ -86,7 +85,6 @@ contract DutchAuction {
 
 		// enact the purchase.
 		uint tokens = participants[_who] / endPrice;
-		uint refund = participants[_who] - endPrice * tokens;
 		totalFinalised += participants[_who];
 		participants[_who] = 0;
 		if (!tokenContract.transfer(_who, tokens)) throw;
@@ -108,7 +106,8 @@ contract DutchAuction {
 	function kill() when_all_finalised { suicide(admin); }
 
 	/// The current price for a single token. If a buyin happens now, this is
-	/// the highest price per token that the buyer will pay.
+	/// the highest price per token that the buyer will pay. This doesn't
+	/// include the discount which may be available.
 	function currentPrice() constant returns (uint weiPerToken) {
 		if (!isActive()) return 0;
 		return beginPrice - (now - beginTime) * saleSpeed;
@@ -120,10 +119,49 @@ contract DutchAuction {
 		return tokenCap - totalReceived / currentPrice();
 	}
 
-	/// The largest purchase than can be made at present.
+	/// The largest purchase than can be made at present, not including any
+	/// discount.
 	function maxPurchase() constant returns (uint spend) {
 		if (!isActive()) return 0;
 		return tokenCap * currentPrice() - totalReceived;
+	}
+
+	/// Get the number of `tokens` that would be given if the sender were to
+	/// spend `_value` now. Also tell you what `refund` would be given, if any.
+	function theDeal(uint _value, address _who)
+		constant
+		returns (uint tokens, uint refund, uint price, uint bonus)
+	{
+		if (!isActive()) return;
+		bonus = this.bonus(_value, _who);
+		_value += bonus;
+		price = currentPrice();
+		uint accepted = _value;
+		uint available = tokensAvailable();
+		tokens = _value / price;
+		refund = 0;
+
+		// if we've asked for too many, we should send back the extra.
+		if (tokens > available) {
+			refund = _value - available * price;
+			accepted -= refund;
+		}
+	}
+
+	/// Add any applicable bonus to `_value` for `_who` and returns it.
+	function bonus(uint _value, address _who)
+		constant
+		returns (uint extra)
+	{
+		if (!isActive()) return 0;
+		if (now < beginTime + BONUS_DURATION && uniquePerson.certified(_who)) {
+			uint already = participants[_who] * 100 / (100 + BONUS_SIZE);
+			uint yet = already < BONUS_LIMIT ? BONUS_LIMIT - already : 0;
+			return _value > yet
+				? yet * BONUS_SIZE / 100
+				: _value * BONUS_SIZE / 100;
+		}
+		return _value;
 	}
 
 	/// True if the sale is ongoing.
@@ -182,6 +220,9 @@ contract DutchAuction {
 	/// The tokens contract.
 	Token public tokenContract;
 
+	/// The unique person certifier.
+	Certifier public uniquePerson = Certifier(0xeAcDEd0D0D6a6145d03Cd96A19A165D56FA122DF);
+
 	/// The treasury address; where all the Ether goes.
 	address public treasury;
 
@@ -212,6 +253,17 @@ contract DutchAuction {
 	/// The statement which should be signed.
 	string constant public STATEMENT = "\x19Ethereum Signed Message:\n47Please take my Ether and try to build Polkadot.";
 
-	/// Statement to actually sign:
-	/// ```js STATEMENT.substr(28) ```
+	/// Statement to actually sign.
+	/// ```js
+	/// function statement() { STATEMENT().map(s => s.substr(28)) }
+	/// ```
+
+	/// Percentage extra given for discounted purchases.
+	uint constant public BONUS_SIZE = 10;
+
+	/// Maxiumum amount of Ether per unique person prior during power hour.
+	uint constant public BONUS_LIMIT = 100 ether;
+
+	/// Duration after sale begins that discount is given.
+	uint constant public BONUS_DURATION = 1 hours;
 }

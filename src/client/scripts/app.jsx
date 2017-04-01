@@ -5,7 +5,7 @@ import RaisedButton from 'material-ui/RaisedButton';
 import TextField from 'material-ui/TextField';
 import Checkbox from 'material-ui/Checkbox';
 import {Bond, TransformBond} from 'oo7';
-import {Transaction, Signature, capitalizeFirstLetter, singleton, interpretQuantity, formatBlockNumber} from 'oo7-parity';
+import {capitalizeFirstLetter, singleton, interpretQuantity, formatBlockNumber} from 'oo7-parity';
 import {Rdiv, Rspan, ReactiveComponent} from 'oo7-react';
 import {AccountIcon, TransactionProgress, SignatureProgress} from 'parity-reactive-ui';
 import styles from "../style.css";
@@ -88,7 +88,7 @@ class Manager extends ReactiveComponent {
 	}
 	handleSign () {
 		this.setState({
-			signing: new Signature(parity.bonds.accounts[0], DutchAuction().STATEMENT().map(s => s.substr(28))).subscriptable(),
+			signing: new parity.bonds.Signature(parity.bonds.accounts[0], DutchAuction().STATEMENT().map(s => s.substr(28))).subscriptable(),
 			contribution: this.state.contribution
 		});
 	}
@@ -213,7 +213,7 @@ export class App extends React.Component {
 				<div className={'container'}>
 				  <span id="logo">
 					<AccountIcon address={DutchAuction().address} id='logoIcon'/>
-					POLKADOT DUTCH AUCTION
+					POLKADUTCH
 				  </span>
 				</div>
 			  </nav>
@@ -267,7 +267,7 @@ export class App extends React.Component {
 			<footer className={'page-footer'}>
 			  <div className={'container'}>
 				<div className={'row'}>
-				  <h1>The Polkadot Dutch Crowd Auction ÐApp.</h1>
+				  <h1>The Dutch Crowd Auction ÐApp.</h1>
 				  Made with &lt;3 by Parity Technologies, 2017.
 				</div>
 			  </div>
