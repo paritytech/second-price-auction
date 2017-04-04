@@ -4,28 +4,31 @@ import React from 'react';
 import RaisedButton from 'material-ui/RaisedButton';
 import TextField from 'material-ui/TextField';
 import Checkbox from 'material-ui/Checkbox';
-import {Bond, TransformBond} from 'oo7';
+import {Bond, TransformBond, ReactivePromise} from 'oo7';
 import {capitalizeFirstLetter, singleton, interpretQuantity, formatBlockNumber} from 'oo7-parity';
 import {Rdiv, Rspan, ReactiveComponent} from 'oo7-react';
 import {AccountIcon, TransactionProgress, SignatureProgress} from 'parity-reactive-ui';
 import styles from "../style.css";
 import {DutchAuctionABI} from './abis.jsx';
 
-function formatBalance(c) { return `${+c.div(1000000000000000000)} ETH`; }
+function formatBalance(c) { return `${+c.div(1000000000000000000)} ether`; }
 
 //var DutchAuction = singleton(() => parity.bonds.makeContract('0x740C644B44d2B46EbDA31E6F87e3f4cA62120e0A', DutchAuctionABI));
 //var DutchAuction = singleton(() => parity.bonds.makeContract('0x856EDD7F20d39f6Ef560a7B118a007A9Bc5CAbfD', DutchAuctionABI));
-var DutchAuction = singleton(() => parity.bonds.makeContract('0x36E6cb0515c6665F8135BF37Ec61ceBDE0CC86f3', DutchAuctionABI));
+var DutchAuction = singleton(() => parity.bonds.makeContract('0xe51c6AA70fE226d9C0d9fBe8F17503C2135bE8A0', DutchAuctionABI));
 //var DutchAuction = singleton(() => parity.bonds.makeContract('0xe643110fBa0b7a72BA454B0AE98c5Cb6345fe34A', DutchAuctionABI));
 
 class ContributionPanel extends ReactiveComponent {
 	constructor() {
-		super(['request', 'signature'], { minPurchase: DutchAuction().currentPrice(), maxPurchase: DutchAuction().maxPurchase() });
+		super(['request', 'signature'], {
+			minPurchase: DutchAuction().currentPrice(),
+			maxPurchase: DutchAuction().maxPurchase()
+		});
         let d = '10 ether';
         this.state = { valueRaw: d, value: interpretQuantity(d) };
+		this.theDeal = DutchAuction().theDeal(this.state.value, parity.bonds.me);
 	}
 	render () {
-		console.log(`request: ${JSON.stringify(this.state.request)}`);
 		return (<div id="contributionPanel">
 			<TextField
                 floatingLabelText="How much to spend?"
@@ -36,18 +39,18 @@ class ContributionPanel extends ReactiveComponent {
 				disabled={!this.state.signature}
 			/>
 			<p style={{textAlign: 'center', margin: '1em 2em'}}>
-				By spending <Rspan>{
-					formatBalance(this.state.value)
-				}</Rspan> now, you will receive <b>
-					at least <Rspan>{
-						DutchAuction().theDeal(this.state.value, parity.bonds.me).map(([accepted, r, price, bonus]) => Math.floor(accepted / price))
-					}</Rspan>
-				</b> DOT tokens
+				By spending {formatBalance(this.state.value)}, you will receive <Rspan>{this.theDeal.map(([accepted, refund, price, bonus]) =>
+					<b><Rspan>{this.theDeal.refund.map(r => r == 0 ? ' ' : ' at least ')}</Rspan>{Math.floor(accepted / price)} dots</b>
+				)}</Rspan>
+				<Rspan>{this.theDeal.refund.map(r => r > 0
+					? <span>and get {formatBalance(r)} refunded</span>
+					: '')
+				}</Rspan>.
 			</p>
 			<RaisedButton
 				label="spend"
 				onClick={()=>{ this.props.onContribute(this.state.value, this.state.signature); }}
-				disabled={!this.state.signature || !this.state.value || +this.state.value > +this.state.maxPurchase || +this.state.value < +this.state.minPurchase || (this.state.request && !this.state.request.failed && !this.state.request.confirmed)}
+				disabled={!this.state.signature || !this.state.value || +this.state.value < +this.state.minPurchase || (this.state.request && !this.state.request.failed && !this.state.request.confirmed)}
 			/>
 			<TransactionProgress request={this.state.request}/>
 		</div>);
@@ -86,7 +89,7 @@ let contributionStatus = singleton(() => new TransformBond((h, b, e, c) =>
     DutchAuction().halted(),
     DutchAuction().beginTime(),
     DutchAuction().endTime(),
-    parity.bonds.block.timestamp.map(t => t / 1000)
+    parity.bonds.head.timestamp.map(t => t / 1000)
 ]));
 
 class Manager extends ReactiveComponent {
@@ -250,14 +253,14 @@ export class App extends React.Component {
 						  <div className={'field'}>
 							<div>Network</div>
 							<Rdiv
-							  className={parity.bonds.netChain.map(c => '_fieldValue _' + c)}
-							>{parity.bonds.netChain.map(capitalizeFirstLetter)}</Rdiv>
+							  className={parity.bonds.chainName.map(c => '_fieldValue _' + c)}
+							>{parity.bonds.chainName.map(capitalizeFirstLetter)}</Rdiv>
 						  </div>
 						  <div className={'field'}>
 							<div>Number</div>
 							<Rdiv
 							  className='_fieldValue _basic'
-							>{parity.bonds.blockNumber.map(formatBlockNumber)}</Rdiv>
+							>{parity.bonds.height.map(formatBlockNumber)}</Rdiv>
 						  </div>
 						</div>
 						<AuctionSummary />
