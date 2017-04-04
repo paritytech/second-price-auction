@@ -75,7 +75,7 @@ contract DutchAuction {
 		Buyin(msg.sender, accepted, refund, price, bonus);
 
 		// send to treasury
-		if (!treasury.send(accepted)) throw;
+		if (!treasury.send(accepted - bonus)) throw;
 		// issue refund
 		if (!msg.sender.send(refund)) throw;
 	}
@@ -190,7 +190,7 @@ contract DutchAuction {
 				? yet * BONUS_SIZE / 100
 				: _value * BONUS_SIZE / 100;
 		}
-		return _value;
+		return 0;
 	}
 
 	/// True if the sale is ongoing.
