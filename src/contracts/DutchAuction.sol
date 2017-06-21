@@ -284,11 +284,6 @@ contract DutchAuction {
 	/// The statement which should be signed.
 	string constant public STATEMENT = "\x19Ethereum Signed Message:\n47Please take my Ether and try to build Polkadot.";
 
-	//# Statement to actually sign.
-	//# ```js
-	//# statement = function() { this.STATEMENT().map(s => s.substr(28)) }
-	//# ```
-
 	/// Percentage of the purchase that is free during bonus period.
 	uint constant public BONUS_SIZE = 10;
 

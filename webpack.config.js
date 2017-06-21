@@ -1,9 +1,11 @@
 var path = require('path');
 
 module.exports = {
-  devTool: '#source-map',
   entry: {
   	app: path.resolve(__dirname, 'src/client/scripts/entry.jsx')
+  },
+  node: {
+    fs: 'empty'
   },
   output: {
     path: path.resolve(__dirname, 'dist'),
@@ -12,15 +14,10 @@ module.exports = {
   },
   module: {
     loaders: [
-      { test: /\.jsx?$/, include: /node_modules\/oo7/, loader: "babel-loader", query: { presets: ['es2015', 'react'] } },
-      { test: /\.jsx?$/, exclude: /node_modules/, loader: "babel-loader", query: { presets: ['es2015', 'react'] } },
-      { test: /\.css$/, loader: 'style-loader!css-loader' },
-      { test: /\.json$/, loader: 'json-loader' },
-      { test: /jquery/, loader: 'expose?$!expose?jQuery' }
+      { test: /\.jsx?$/, exclude: /node_modules/, loader: "babel-loader", query: { presets: ['es2015', 'react'] } }
     ]
   },
   resolve: {
-    extensions: ['', '.js', '.json', '.jsx'],
-    mainFields: ['jsnext:main', 'browser', 'main']
+    extensions: ['.js', '.json', '.jsx']
   }
 };

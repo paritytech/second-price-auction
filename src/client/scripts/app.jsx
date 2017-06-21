@@ -1,22 +1,18 @@
 import moment from 'moment';
-import vagueTime from 'vague-time';
 import React from 'react';
-import RaisedButton from 'material-ui/RaisedButton';
-import TextField from 'material-ui/TextField';
-import Checkbox from 'material-ui/Checkbox';
+import {Button, Checkbox} from 'semantic-ui-react';
 import {Bond, TransformBond, ReactivePromise} from 'oo7';
-import {capitalizeFirstLetter, singleton, interpretQuantity, formatBlockNumber} from 'oo7-parity';
+import {capitalizeFirstLetter, removeSigningPrefix, singleton, formatBlockNumber, bonds} from 'oo7-parity';
 import {Rdiv, Rspan, ReactiveComponent} from 'oo7-react';
-import {AccountIcon, TransactionProgress, SignatureProgress} from 'parity-reactive-ui';
-import styles from "../style.css";
+import {AccountIcon, BalanceBond, TransactButton, SigningProgressLabel, InlineBalance} from 'parity-reactive-ui';
 import {DutchAuctionABI} from './abis.jsx';
 
 function formatBalance(c) { return `${+c.div(1000000000000000000)} ether`; }
 
-//var DutchAuction = singleton(() => parity.bonds.makeContract('0x740C644B44d2B46EbDA31E6F87e3f4cA62120e0A', DutchAuctionABI));
-//var DutchAuction = singleton(() => parity.bonds.makeContract('0x856EDD7F20d39f6Ef560a7B118a007A9Bc5CAbfD', DutchAuctionABI));
-var DutchAuction = singleton(() => parity.bonds.makeContract('0xe51c6AA70fE226d9C0d9fBe8F17503C2135bE8A0', DutchAuctionABI));
-//var DutchAuction = singleton(() => parity.bonds.makeContract('0xe643110fBa0b7a72BA454B0AE98c5Cb6345fe34A', DutchAuctionABI));
+//var DutchAuction = singleton(() => bonds.makeContract('0x740C644B44d2B46EbDA31E6F87e3f4cA62120e0A', DutchAuctionABI));
+//var DutchAuction = singleton(() => bonds.makeContract('0x856EDD7F20d39f6Ef560a7B118a007A9Bc5CAbfD', DutchAuctionABI));
+var DutchAuction = singleton(() => bonds.makeContract('0xC695F252Cb68021E99E020ebd3e817a82ADEe17F', DutchAuctionABI));
+//var DutchAuction = singleton(() => bonds.makeContract('0xe643110fBa0b7a72BA454B0AE98c5Cb6345fe34A', DutchAuctionABI));
 
 class ContributionPanel extends ReactiveComponent {
 	constructor() {
@@ -25,34 +21,30 @@ class ContributionPanel extends ReactiveComponent {
 			maxPurchase: DutchAuction().maxPurchase()
 		});
         let d = '10 ether';
-        this.state = { valueRaw: d, value: interpretQuantity(d) };
-		this.theDeal = DutchAuction().theDeal(this.state.value, parity.bonds.me);
+        this.spend = new Bond;
+		this.theDeal = DutchAuction().theDeal(this.spend, bonds.me);
 	}
 	render () {
 		return (<div id="contributionPanel">
-			<TextField
-                floatingLabelText="How much to spend?"
-				hintText="1 ether"
-                value={this.state.valueRaw}
-                errorText={this.state.value === null ? 'Invalid quantity' : null}
-                onChange={(e, v) => { this.setState({valueRaw: v, value: interpretQuantity(v)}); }}
+			<BalanceBond
+				hintText="How much to spend?"
+                bond={this.spend}
 				disabled={!this.state.signature}
 			/>
 			<p style={{textAlign: 'center', margin: '1em 2em'}}>
-				By spending {formatBalance(this.state.value)}, you will receive <Rspan>{this.theDeal.map(([accepted, refund, price, bonus]) =>
-					<b><Rspan>{this.theDeal.refund.map(r => r == 0 ? ' ' : ' at least ')}</Rspan>{Math.floor(accepted / price)} dots</b>
+				By spending <InlineBalance value={this.spend}/>, you will receive <Rspan>{this.theDeal.map(([accepted, refund, price, bonus]) =>
+					<b><Rspan>{refund == 0 ? ' ' : ' at least '}</Rspan>{Math.floor(accepted / price)} DOTs</b>
 				)}</Rspan>
-				<Rspan>{this.theDeal.refund.map(r => r > 0
-					? <span>and get {formatBalance(r)} refunded</span>
+				<Rspan>{this.theDeal.map(([_, r]) => r > 0
+					? <span>and get <InlineBalance value={r}/> refunded</span>
 					: '')
 				}</Rspan>.
 			</p>
-			<RaisedButton
-				label="spend"
-				onClick={()=>{ this.props.onContribute(this.state.value, this.state.signature); }}
-				disabled={!this.state.signature || !this.state.value || +this.state.value < +this.state.minPurchase || (this.state.request && !this.state.request.failed && !this.state.request.confirmed)}
+			<TransactButton
+				content="Purchase DOTs"
+				tx={()=>this.props.onContribute(this.spend, this.state.signature)}
+				disabled={this.spend.map(s => !this.state.signature || !s || +s < +this.state.minPurchase || (this.state.request && !this.state.request.failed && !this.state.request.confirmed))}
 			/>
-			<TransactionProgress request={this.state.request}/>
 		</div>);
 	}
 }
@@ -67,17 +59,11 @@ class TermsPanel extends ReactiveComponent {
 				label='I hereby confirm I have read all applicable terms and conditions. Please accept my contribution.'
 				checked={this.state.request ? !!this.state.request.signed : false}
 				disabled={this.state.request ? !!this.state.request.requested : false}
-				onCheck={ (_, c) => { if (c) this.props.onRequest(); } }
-				iconStyle={{width: '3em', height: '3em'}}
-				labelStyle={{fontSize: '16pt', lineHeight: 'normal'}}
+				onChange={ (_, c) => { if (c.checked) this.props.onRequest(); } }
 				className='bigCheckbox'
 			/>
 		);
 	}
-}
-
-function splitSignature(vrs) {
-	return [vrs.substr(0, 4), `0x${vrs.substr(4, 64)}`, `0x${vrs.substr(68, 64)}`];
 }
 
 let contributionStatus = singleton(() => new TransformBond((h, b, e, c) =>
@@ -89,7 +75,7 @@ let contributionStatus = singleton(() => new TransformBond((h, b, e, c) =>
     DutchAuction().halted(),
     DutchAuction().beginTime(),
     DutchAuction().endTime(),
-    parity.bonds.head.timestamp.map(t => t / 1000)
+    bonds.head.timestamp.map(t => t / 1000)
 ]));
 
 class Manager extends ReactiveComponent {
@@ -97,20 +83,21 @@ class Manager extends ReactiveComponent {
 		super([], { status: contributionStatus() });
 		this.state = { signing: null, contribution: null };
 		// reset state if identity changed.
-		this.resetSigWhenAccountChanged = new TransformBond(() => this.setState({ signing: null, contribution: this.state.contribution }), [], [parity.bonds.accounts[0]]);
+		this.resetSigWhenAccountChanged = new TransformBond(() => this.setState({ signing: null }), [], [bonds.me]);
 	}
 	handleSign () {
+		let s = bonds.sign(DutchAuction().STATEMENT().map(removeSigningPrefix)).subscriptable();
 		this.setState({
-			signing: new parity.bonds.Signature(parity.bonds.accounts[0], DutchAuction().STATEMENT().map(s => s.substr(28))).subscriptable(),
-			contribution: this.state.contribution
+			signing: s
 		});
+		return s;
 	}
 	handleContribute (value, signature) {
-		console.log(`handleContrib: value: ${value}, sig: ${signature}`);
+		let t = DutchAuction().buyin(...signature, { value });
 		this.setState({
-			signing: this.state.signing,
-			contribution: DutchAuction().buyin(...splitSignature(signature), { from: parity.bonds.me, value })
+			contribution: t
 		});
+		return t;
 	}
 	render () {
         return (this.state.status && this.state.status.active)
@@ -127,7 +114,7 @@ class Manager extends ReactiveComponent {
 			  <section id="action">
 				<h1>Send Funds</h1>
 				<ContributionPanel
-				  signature={this.state.signing ? this.state.signing.map(s => s.signed || null) : null}
+				  signature={this.state.signing ? this.state.signing.map(s => (s.signed || null)) : null}
 	              request={this.state.contribution}
 	              onContribute={this.handleContribute.bind(this)}
 	            />
@@ -143,23 +130,21 @@ class Subtitling extends ReactiveComponent {
 		super([], { isActive: DutchAuction().isActive(), allFinalised: DutchAuction().allFinalised(), totalReceived: DutchAuction().totalReceived() });
 	}
 	render () {
-		let minFinal = Bond.all([DutchAuction().tokenCap(), DutchAuction().totalReceived()]).map(([a, b]) => formatBalance(b.div(a)));
+		let minFinal = Bond.all([DutchAuction().tokenCap(), DutchAuction().totalReceived()]).map(([a, b]) => b.div(a));
 		return this.state.isActive ?
 			(<p>
 				<Rspan>{DutchAuction().tokenCap().map(t => `${t}`)}</Rspan> DOTs to be sold! <br/>
 				<Rspan>{DutchAuction().totalReceived().map(formatBalance)}</Rspan> raised so far!<br/>
-				Auction will close <Rspan>{DutchAuction().endTime().map(t => vagueTime.get({ to: new Date(t * 1000) }))}</Rspan> <i>at the latest</i>!<br/>
-				Final price will be at least <Rspan>{
-					minFinal
-				}</Rspan> per DOT!
+				Auction will close <Rspan>{DutchAuction().endTime().map(t => moment.unix(t).fromNow())}</Rspan> <i>at the latest</i>!<br/>
+				Final price will be at least <InlineBalance value={minFinal}/> per DOT!
 			</p>) :
 			+this.state.totalReceived > 0 ?
 			(<p>
-				Auction closed <Rspan>{DutchAuction().endTime().map(t => vagueTime.get({ to: new Date(t * 1000) }))}</Rspan>:<br/>
+				Auction closed <Rspan>{DutchAuction().endTime().map(t => moment.unix(t).fromNow())}</Rspan>:<br/>
 				{formatBalance(this.state.totalReceived)} raised in total!<br/>
 			</p>) :
 			(<p>
-				Auction will begin <Rspan>{DutchAuction().beginTime().map(t => vagueTime.get({ to: new Date(t * 1000) }))}</Rspan>!
+				Auction will begin <Rspan>{DutchAuction().beginTime().map(t => moment.unix(t).fromNow())}</Rspan>!
 			</p>);
 	}
 }
@@ -247,20 +232,20 @@ export class App extends React.Component {
 						  <div className={'field'}>
 							<div>Status</div>
 							<Rdiv
-							  className={parity.bonds.peerCount.map(c => '_fieldValue ' + (c > 0 ? '_online' : '_offline'))}
-							>{parity.bonds.peerCount.map(c => c > 0 ? '● Online' : '○ Offline')}</Rdiv>
+							  className={bonds.peerCount.map(c => '_fieldValue ' + (c > 0 ? '_online' : '_offline'))}
+							>{bonds.peerCount.map(c => c > 0 ? '● Online' : '○ Offline')}</Rdiv>
 						  </div>
 						  <div className={'field'}>
 							<div>Network</div>
 							<Rdiv
-							  className={parity.bonds.chainName.map(c => '_fieldValue _' + c)}
-							>{parity.bonds.chainName.map(capitalizeFirstLetter)}</Rdiv>
+							  className={bonds.chainName.map(c => '_fieldValue _' + c)}
+							>{bonds.chainName.map(capitalizeFirstLetter)}</Rdiv>
 						  </div>
 						  <div className={'field'}>
 							<div>Number</div>
 							<Rdiv
 							  className='_fieldValue _basic'
-							>{parity.bonds.height.map(formatBlockNumber)}</Rdiv>
+							>{bonds.height.map(formatBlockNumber)}</Rdiv>
 						  </div>
 						</div>
 						<AuctionSummary />
@@ -289,4 +274,3 @@ export class App extends React.Component {
 		</div>);
 	}
 }
- //moment.unix(t).fromNow()
