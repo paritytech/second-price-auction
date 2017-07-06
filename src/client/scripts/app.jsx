@@ -25,7 +25,7 @@ class ContributionPanel extends ReactiveComponent {
 		this.theDeal = DutchAuction().theDeal(this.spend, bonds.me);
 	}
 	render () {
-		return (<div id="contributionPanel">
+		return (<div id='contributionPanel'>
 			<BalanceBond
 				hintText="How much to spend?"
                 bond={this.spend}
@@ -33,7 +33,7 @@ class ContributionPanel extends ReactiveComponent {
 			/>
 			<p style={{textAlign: 'center', margin: '1em 2em'}}>
 				By spending <InlineBalance value={this.spend}/>, you will receive <Rspan>{this.theDeal.map(([accepted, refund, price, bonus]) =>
-					<b><Rspan>{refund == 0 ? ' ' : ' at least '}</Rspan>{Math.floor(accepted / price)} DOTs</b>
+					<b>at least {Math.floor(accepted / price)} DOT</b>
 				)}</Rspan>
 				<Rspan>{this.theDeal.map(([_, r]) => r > 0
 					? <span>and get <InlineBalance value={r}/> refunded</span>
@@ -82,15 +82,14 @@ class Manager extends ReactiveComponent {
 	constructor() {
 		super([], { status: contributionStatus() });
 		this.state = { signing: null, contribution: null };
-		// reset state if identity changed.
-		this.resetSigWhenAccountChanged = new TransformBond(() => this.setState({ signing: null }), [], [bonds.me]);
 	}
 	handleSign () {
-		let s = bonds.sign(DutchAuction().STATEMENT().map(removeSigningPrefix)).subscriptable();
-		this.setState({
-			signing: s
+		let that = this;
+		bonds.me.then(me => {
+			let signReq = bonds.sign(DutchAuction().STATEMENT().map(removeSigningPrefix), me);
+			let signing = bonds.me.map(newMe => me === newMe ? signReq : null);
+			that.setState({signing});
 		});
-		return s;
 	}
 	handleContribute (value, signature) {
 		let t = DutchAuction().buyin(...signature, { value });
@@ -103,7 +102,7 @@ class Manager extends ReactiveComponent {
         return (this.state.status && this.state.status.active)
           ? (
 			<div>
-			  <section id="terms">
+			  <section id='terms'>
 				<h1>Terms and Conditions</h1>
 				<p>TODO: Put some terms and conditions here</p>
 				<TermsPanel
@@ -111,10 +110,10 @@ class Manager extends ReactiveComponent {
 	  			  onRequest={this.handleSign.bind(this)}
 				/>
 			  </section>
-			  <section id="action">
+			  <section id='action'>
 				<h1>Send Funds</h1>
 				<ContributionPanel
-				  signature={this.state.signing ? this.state.signing.map(s => (s.signed || null)) : null}
+				  signature={this.state.signing ? this.state.signing.map(s => (s && s.signed || null)) : null}
 	              request={this.state.contribution}
 	              onContribute={this.handleContribute.bind(this)}
 	            />
@@ -134,7 +133,7 @@ class Subtitling extends ReactiveComponent {
 		return this.state.isActive ?
 			(<p>
 				<Rspan>{DutchAuction().tokenCap().map(t => `${t}`)}</Rspan> DOTs to be sold! <br/>
-				<Rspan>{DutchAuction().totalReceived().map(formatBalance)}</Rspan> raised so far!<br/>
+				<InlineBalance value={DutchAuction().totalReceived()}/> raised so far!<br/>
 				Auction will close <Rspan>{DutchAuction().endTime().map(t => moment.unix(t).fromNow())}</Rspan> <i>at the latest</i>!<br/>
 				Final price will be at least <InlineBalance value={minFinal}/> per DOT!
 			</p>) :
@@ -165,15 +164,15 @@ class AuctionSummary extends ReactiveComponent {
 			  </div>
 			  <div className={'field'}>
 				<div>Current Price</div>
-				<Rdiv
+				<div
 					className='_fieldValue _basic'
-				>{DutchAuction().currentPrice().map(c => `${+c.div(1000000000000000000)} ETH`)}</Rdiv>
+				><InlineBalance value={DutchAuction().currentPrice()} defaultDenom='finney'/></div>
 			  </div>
 			  <div className={'field'}>
 				<div>Max Purchase</div>
-				<Rdiv
+				<div
 					className='_fieldValue _basic'
-				>{DutchAuction().maxPurchase().map(formatBalance)}</Rdiv>
+				><InlineBalance value={DutchAuction().maxPurchase()} defaultDenom='ether'/></div>
 			  </div>
 			</div>) :
 			+this.state.totalReceived > 0 ?
@@ -201,47 +200,51 @@ class AuctionSummary extends ReactiveComponent {
 	}
 }
 
-export class App extends React.Component {
+export class App extends ReactiveComponent {
 	constructor() {
-		super();
+		super([], { purchased: bonds.accounts.mapEach(a => DutchAuction().participants(a)).map(bs => bs.reduce((x, a) => x.add(a))) });
+		window.bonds = bonds;
+		window.DutchAuction = DutchAuction;
+		window.formatBalance = formatBalance;
 	}
 	render () {
-		return (<div className={'site'}>
+		let purchased = this.state.purchased;
+		return purchased == null ? <div/> : (<div className='site'>
 			<header>
-			  <nav className={'nav-header'}>
-				<div className={'container'}>
-				  <span id="logo">
+			  <nav className='nav-header'>
+				<div className='container'>
+				  <span id='logo'>
 					<AccountIcon address={DutchAuction().address} id='logoIcon'/>
 					POLKADUTCH
 				  </span>
 				</div>
 			  </nav>
 			</header>
-			<div className={'site-content'}>
-			  <section className={'contrib-hero'}>
-				<div className={'container'}>
-				  <div className={'row'}>
-					<div id="status">
-					  <div id="status-title">
+			<div className='site-content'>
+			  <section className='contrib-hero'>
+				<div className='container'>
+				  <div className='row'>
+					<div id='status'>
+					  <div id='status-title'>
 						<h1>Get yer <span style={{fontSize: '21pt'}}>DOT</span>s!</h1>
 						<Subtitling />
 					  </div>
-					  <div className={'status-rest'}>
+					  <div className='status-rest'>
 						<div>
-						  <div className={'title'}>Network<br />Summary</div>
-						  <div className={'field'}>
+						  <div className='title'>Network<br />Summary</div>
+						  <div className='field'>
 							<div>Status</div>
 							<Rdiv
 							  className={bonds.peerCount.map(c => '_fieldValue ' + (c > 0 ? '_online' : '_offline'))}
 							>{bonds.peerCount.map(c => c > 0 ? '● Online' : '○ Offline')}</Rdiv>
 						  </div>
-						  <div className={'field'}>
+						  <div className='field'>
 							<div>Network</div>
 							<Rdiv
 							  className={bonds.chainName.map(c => '_fieldValue _' + c)}
 							>{bonds.chainName.map(capitalizeFirstLetter)}</Rdiv>
 						  </div>
-						  <div className={'field'}>
+						  <div className='field'>
 							<div>Number</div>
 							<Rdiv
 							  className='_fieldValue _basic'
@@ -254,18 +257,25 @@ export class App extends React.Component {
 				  </div>
 				</div>
 			  </section>
-			  <section className={'contrib-main'}>
-				<div className={'container'}>
-				  <div className={'row'}>
+			  {
+				+purchased == 0 ? null : (<section className='state-main'>
+					<div className='container'>
+					  You spent <InlineBalance value={purchased} /> to buy at least <Rspan>{DutchAuction().currentPrice().map(_ => ''+Math.floor(purchased.mul(1000).div(_)) / 1000)}</Rspan> DOT
+					</div>
+				</section>)
+			  }
+			  <section className='contrib-main'>
+				<div className='container'>
+				  <div className='row'>
 					<Manager />
 				  </div>
 				</div>
 			  </section>
 			</div>
 
-			<footer className={'page-footer'}>
-			  <div className={'container'}>
-				<div className={'row'}>
+			<footer className='page-footer'>
+			  <div className='container'>
+				<div className='row'>
 				  <h1>The Dutch Crowd Auction ÐApp.</h1>
 				  Made with &lt;3 by Parity Technologies, 2017.
 				</div>
