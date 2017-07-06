@@ -16,7 +16,7 @@ contract Certifier {
 /// Simple Dutch Auction contract. Price starts high and monotonically decreases
 /// until all tokens are sold at the current price with currently received
 /// funds.
-contract DutchAuction {
+contract SecondPriceAuction {
 	// Events:
 
 	/// Someone bought in at a particular max-price.
@@ -58,6 +58,8 @@ contract DutchAuction {
 		when_active
 		avoid_dust
 		only_signed(msg.sender, v, r, s)
+		only_basic
+		only_certified
 	{
 		uint accepted;
 		uint refund;
@@ -183,12 +185,8 @@ contract DutchAuction {
 		returns (uint extra)
 	{
 		if (!isActive()) return 0;
-		if (now < beginTime + BONUS_DURATION && uniquePerson.certified(_who)) {
-			uint already = participants[_who] * 100 / (100 + BONUS_SIZE);
-			uint yet = already < BONUS_LIMIT ? BONUS_LIMIT - already : 0;
-			return _value > yet
-				? yet * BONUS_SIZE / 100
-				: _value * BONUS_SIZE / 100;
+		if (now < beginTime + BONUS_DURATION) {
+			return _value * BONUS_SIZE / 100;
 		}
 		return 0;
 	}
@@ -225,6 +223,21 @@ contract DutchAuction {
 	/// Ensure that the signature is valid.
 	modifier only_signed(address who, uint8 v, bytes32 r, bytes32 s) { if (ecrecover(STATEMENT_HASH, v, r, s) == who) _; else throw; }
 
+	/// Ensure sender is not a contract.
+	modifier only_basic {
+		address sender = msg.sender;
+		uint senderCodeSize;
+		assembly {
+			senderCodeSize := extcodesize(sender)
+		}
+		if (senderCodeSize == 0)
+			_;
+		else
+			throw;
+	}
+
+	modifier only_certified { if (certifier.certified(msg.sender)) _; else throw; }
+
 	// State:
 
 	/// The auction participants.
@@ -251,8 +264,8 @@ contract DutchAuction {
 	/// The tokens contract.
 	Token public tokenContract;
 
-	/// The unique person certifier.
-	Certifier public uniquePerson = Certifier(0xeAcDEd0D0D6a6145d03Cd96A19A165D56FA122DF);
+	/// The certifier.
+	Certifier public certifier = Certifier(0xeAcDEd0D0D6a6145d03Cd96A19A165D56FA122DF);
 
 	/// The treasury address; where all the Ether goes.
 	address public treasury;
@@ -284,11 +297,13 @@ contract DutchAuction {
 	/// The statement which should be signed.
 	string constant public STATEMENT = "\x19Ethereum Signed Message:\n47Please take my Ether and try to build Polkadot.";
 
-	/// Percentage of the purchase that is free during bonus period.
-	uint constant public BONUS_SIZE = 10;
+	//# Statement to actually sign.
+	//# ```js
+	//# statement = function() { this.STATEMENT().map(s => s.substr(28)) }
+	//# ```
 
-	/// Maxiumum amount of Ether per unique person that counts for bonus.
-	uint constant public BONUS_LIMIT = 100 ether;
+	/// Percentage of the purchase that is free during bonus period.
+	uint constant public BONUS_SIZE = 15;
 
 	/// Duration after sale begins that bonus is active.
 	uint constant public BONUS_DURATION = 1 hours;
