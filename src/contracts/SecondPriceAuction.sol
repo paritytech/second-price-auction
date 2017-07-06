@@ -25,6 +25,9 @@ contract SecondPriceAuction {
 	/// Admin injected a purchase.
 	event Injected(address indexed who, uint value);
 
+	/// Admin injected a purchase.
+	event PrepayBuyin(address indexed who, uint value);
+
 	/// The sale just ended with the current price.
 	event Ended(uint price);
 
@@ -58,8 +61,8 @@ contract SecondPriceAuction {
 		when_active
 		avoid_dust
 		only_signed(msg.sender, v, r, s)
-		only_basic
-		only_certified
+		only_basic(msg.sender)
+		only_certified(msg.sender)
 	{
 		uint accepted;
 		uint refund;
@@ -70,16 +73,33 @@ contract SecondPriceAuction {
 		// record the acceptance.
 		participants[msg.sender] += accepted;
 		totalReceived += accepted;
-		uint targetPrice = totalReceived / tokenCap;
-		uint salePriceDrop = beginPrice - targetPrice;
-		uint saleDuration = salePriceDrop / saleSpeed;
-		endTime = beginTime + saleDuration;
+		endTime = beginTime + (beginPrice - (totalReceived / tokenCap)) / saleSpeed;
 		Buyin(msg.sender, accepted, refund, price, bonus);
 
 		// send to treasury
 		if (!treasury.send(accepted - bonus)) throw;
 		// issue refund
 		if (!msg.sender.send(refund)) throw;
+	}
+
+	/// Like buyin except no payment required.
+	function prepayBuyin(uint8 v, bytes32 r, bytes32 s, address _who, uint _value)
+	    when_not_halted
+	    when_active
+	    only_admin
+	    only_signed(_who, v, r, s)
+	    only_basic(_who)
+	    only_certified(_who)
+	{
+		participants[_who] += _value;
+
+		totalReceived += _value;
+		uint targetPrice = totalReceived / tokenCap;
+		uint salePriceDrop = beginPrice - targetPrice;
+		uint saleDuration = salePriceDrop / saleSpeed;
+		endTime = beginTime + saleDuration;
+
+		PrepayBuyin(_who, _value);
 	}
 
 	/// Mint tokens for a particular participant.
@@ -197,6 +217,15 @@ contract SecondPriceAuction {
 	/// True if all participants have finalised.
 	function allFinalised() constant returns (bool) { return now >= endTime && totalReceived == totalFinalised; }
 
+	/// Returns true if the sender of this transaction is a basic account.
+	function isBasicAccount(address _who) internal returns (bool) {
+		uint senderCodeSize;
+		assembly {
+			senderCodeSize := extcodesize(_who)
+		}
+	    return senderCodeSize == 0;
+	}
+
 	// Modifiers:
 
 	/// Ensure the sale is ongoing.
@@ -224,19 +253,10 @@ contract SecondPriceAuction {
 	modifier only_signed(address who, uint8 v, bytes32 r, bytes32 s) { if (ecrecover(STATEMENT_HASH, v, r, s) == who) _; else throw; }
 
 	/// Ensure sender is not a contract.
-	modifier only_basic {
-		address sender = msg.sender;
-		uint senderCodeSize;
-		assembly {
-			senderCodeSize := extcodesize(sender)
-		}
-		if (senderCodeSize == 0)
-			_;
-		else
-			throw;
-	}
+	modifier only_basic(address who) { if (isBasicAccount(who)) _; else throw; }
 
-	modifier only_certified { if (certifier.certified(msg.sender)) _; else throw; }
+    /// Ensure sender has signed the contract.
+	modifier only_certified(address who) { if (certifier.certified(who)) _; else throw; }
 
 	// State:
 
