@@ -1,7 +1,7 @@
 {
-	"id": "dutch-contribution",
-	"name": "Polkadot Contribution",
-	"description": "The Polkadot Dutch-auction",
+	"id": "second-price-auction",
+	"name": "Whitelabel Auction",
+	"description": "The Whitelabel Modified Second Price Auction",
 	"version": "0.1",
 	"author": "Parity Technologies",
 	"iconUrl": "title.png"

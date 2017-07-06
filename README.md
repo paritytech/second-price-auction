@@ -1,4 +1,4 @@
-# Dutch contribution dapp.
+# Whitelabel Second Price Auction Dapp.
 
 To install:
 

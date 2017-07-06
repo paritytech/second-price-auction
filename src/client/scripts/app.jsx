@@ -215,7 +215,7 @@ export class App extends ReactiveComponent {
 				<div className='container'>
 				  <span id='logo'>
 					<AccountIcon address={DutchAuction().address} id='logoIcon'/>
-					POLKADUTCH
+					WHITELABEL
 				  </span>
 				</div>
 			  </nav>

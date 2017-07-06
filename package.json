@@ -1,7 +1,7 @@
 {
-  "name": "dutch-contribution",
+  "name": "second-price-auction",
   "version": "0.1.2",
-  "description": "Dutch contribution dapp",
+  "description": "Second Price Auction Dapp",
   "main": "webpack.config.js",
   "dependencies": {
     "babel-core": "^6.25.0",
