@@ -86,16 +86,12 @@ contract FrozenToken is Owned, Token {
 		return accounts[_who].balance;
 	}
 
-	// transfer
-	function transferLiquid(address _to, uint256 _value)
+	// make an account liquid: only liquid accounts can do this.
+	function makeLiquid(address _to)
 		when_no_eth
-		when_owns(msg.sender, _value)
 		when_liquid(msg.sender)
 		returns(bool)
 	{
-		Transfer(msg.sender, _to, _value);
-		accounts[msg.sender].balance -= _value;
-		accounts[_to].balance += _value;
 		accounts[_to].liquid = true;
 		return true;
 	}
