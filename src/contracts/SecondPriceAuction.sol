@@ -40,7 +40,7 @@ contract SecondPriceAuction {
 	// Constructor:
 
 	/// Simple constructor.
-	function DutchAuction(address _tokenContract, address _treasury, address _admin, uint _beginTime, uint _beginPrice, uint _saleSpeed, uint _tokenCap) {
+	function SecondPriceAuction(address _tokenContract, address _treasury, address _admin, uint _beginTime, uint _beginPrice, uint _saleSpeed, uint _tokenCap) {
 		tokenContract = Token(_tokenContract);
 		treasury = _treasury;
 		admin = _admin;
@@ -102,6 +102,22 @@ contract SecondPriceAuction {
 		PrepayBuyin(_who, _value);
 	}
 
+	/// Like buyin except no payment required.
+	function inject(address _who, uint _value)
+	    only_admin
+	    only_basic(_who)
+	{
+		participants[_who] += _value;
+
+		totalReceived += _value;
+		uint targetPrice = totalReceived / tokenCap;
+		uint salePriceDrop = beginPrice - targetPrice;
+		uint saleDuration = salePriceDrop / saleSpeed;
+		endTime = beginTime + saleDuration;
+
+		Injected(_who, _value);
+	}
+
 	/// Mint tokens for a particular participant.
 	function finalise(address _who)
 		when_not_halted
@@ -128,19 +144,6 @@ contract SecondPriceAuction {
 	}
 
 	// Admin interaction:
-
-	/// Like buyin except no payment required.
-	function inject(address _who, uint _value) only_admin {
-		participants[_who] += _value;
-
-		totalReceived += _value;
-		uint targetPrice = totalReceived / tokenCap;
-		uint salePriceDrop = beginPrice - targetPrice;
-		uint saleDuration = salePriceDrop / saleSpeed;
-		endTime = beginTime + saleDuration;
-
-		Injected(_who, _value);
-	}
 
 	/// Emergency function to pause buy-in and finalisation.
 	function setHalted(bool _halted) only_admin { halted = _halted; }
