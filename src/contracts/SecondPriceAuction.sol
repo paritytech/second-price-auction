@@ -23,10 +23,10 @@ contract SecondPriceAuction {
 	event Buyin(address indexed who, uint accepted, uint refund, uint price, uint bonus);
 
 	/// Admin injected a purchase.
-	event Injected(address indexed who, uint value);
+	event Injected(address indexed who, uint accepted, uint bonus);
 
 	/// Admin injected a purchase.
-	event PrepayBuyin(address indexed who, uint value);
+	event PrepayBuyin(address indexed who, uint accepted, uint price, uint bonus);
 
 	/// The sale just ended with the current price.
 	event Ended(uint price);
@@ -68,22 +68,23 @@ contract SecondPriceAuction {
 		uint refund;
 		uint price;
 		uint bonus;
-		(accepted, refund, price, bonus) = theDeal(msg.value, msg.sender);
+		(accepted, refund, price, bonus) = theDeal(msg.value);
 
 		// record the acceptance.
-		participants[msg.sender] += accepted;
+		participants[msg.sender].value += uint128(accepted);
+		participants[msg.sender].bonus += uint128(bonus);
 		totalReceived += accepted;
 		endTime = beginTime + (beginPrice - (totalReceived / tokenCap)) / saleSpeed;
 		Buyin(msg.sender, accepted, refund, price, bonus);
 
 		// send to treasury
-		if (!treasury.send(accepted - bonus)) throw;
+		require (treasury.send(accepted - bonus));
 		// issue refund
-		if (!msg.sender.send(refund)) throw;
+		require (msg.sender.send(refund));
 	}
 
 	/// Like buyin except no payment required.
-	function prepayBuyin(uint8 v, bytes32 r, bytes32 s, address _who, uint _value)
+	function prepayBuyin(uint8 v, bytes32 r, bytes32 s, address _who, uint128 _value)
 	    when_not_halted
 	    when_active
 	    only_admin
@@ -91,31 +92,35 @@ contract SecondPriceAuction {
 	    only_basic(_who)
 	    only_certified(_who)
 	{
-		participants[_who] += _value;
+		uint accepted;
+		uint refund;
+		uint price;
+		uint bonus;
+		(accepted, refund, price, bonus) = theDeal(_value);
 
-		totalReceived += _value;
-		uint targetPrice = totalReceived / tokenCap;
-		uint salePriceDrop = beginPrice - targetPrice;
-		uint saleDuration = salePriceDrop / saleSpeed;
-		endTime = beginTime + saleDuration;
+		/// No refunds allowed when pre-paid.
+		require (refund == 0);
 
-		PrepayBuyin(_who, _value);
+		participants[_who].value += uint128(accepted);
+		participants[_who].bonus += uint128(bonus);
+		totalReceived += accepted;
+		endTime = beginTime + (beginPrice - (totalReceived / tokenCap)) / saleSpeed;
+		PrepayBuyin(_who, accepted, price, bonus);
 	}
 
-	/// Like buyin except no payment required.
-	function inject(address _who, uint _value)
+	/// Like buyin except no payment required and bonus automatically given.
+	function inject(address _who, uint128 _spent)
 	    only_admin
 	    only_basic(_who)
 	{
-		participants[_who] += _value;
+		uint128 bonus = _spent * uint128(BONUS_SIZE) / 100;
+		uint128 value = _spent + bonus;
 
-		totalReceived += _value;
-		uint targetPrice = totalReceived / tokenCap;
-		uint salePriceDrop = beginPrice - targetPrice;
-		uint saleDuration = salePriceDrop / saleSpeed;
-		endTime = beginTime + saleDuration;
-
-		Injected(_who, _value);
+		participants[_who].value += value;
+		participants[_who].bonus += bonus;
+		totalReceived += value;
+		endTime = beginTime + (beginPrice - (totalReceived / tokenCap)) / saleSpeed;
+		Injected(_who, value, bonus);
 	}
 
 	/// Mint tokens for a particular participant.
@@ -131,10 +136,11 @@ contract SecondPriceAuction {
 		}
 
 		// enact the purchase.
-		uint tokens = participants[_who] / endPrice;
-		totalFinalised += participants[_who];
-		participants[_who] = 0;
-		if (!tokenContract.transfer(_who, tokens)) throw;
+		uint total = participants[_who].value;
+		uint tokens = total / endPrice;
+		totalFinalised += total;
+		delete participants[_who];
+		require (tokenContract.transfer(_who, tokens));
 
 		Finalised(_who, tokens);
 
@@ -149,7 +155,7 @@ contract SecondPriceAuction {
 	function setHalted(bool _halted) only_admin { halted = _halted; }
 
 	/// Emergency function to drain the contract of any funds.
-	function drain() only_admin { if (!treasury.send(this.balance)) throw; }
+	function drain() only_admin { require (treasury.send(this.balance)); }
 
 	/// Kill this contract once the sale is finished.
 	function kill() when_all_finalised { suicide(admin); }
@@ -179,12 +185,12 @@ contract SecondPriceAuction {
 
 	/// Get the number of `tokens` that would be given if the sender were to
 	/// spend `_value` now. Also tell you what `refund` would be given, if any.
-	function theDeal(uint _value, address _who)
+	function theDeal(uint _value)
 		constant
 		returns (uint accepted, uint refund, uint price, uint bonus)
 	{
 		if (!isActive()) return;
-		bonus = this.bonus(_value, _who);
+		bonus = this.bonus(_value);
 		price = currentPrice();
 		accepted = _value + bonus;
 		uint available = tokensAvailable();
@@ -202,8 +208,8 @@ contract SecondPriceAuction {
 		}
 	}
 
-	/// Add any applicable bonus to `_value` for `_who` and returns it.
-	function bonus(uint _value, address _who)
+	/// Any applicable bonus to `_value` and returns it.
+	function bonus(uint _value)
 		constant
 		returns (uint extra)
 	{
@@ -232,39 +238,44 @@ contract SecondPriceAuction {
 	// Modifiers:
 
 	/// Ensure the sale is ongoing.
-	modifier when_active { if (isActive()) _; else throw; }
+	modifier when_active { require (isActive()); _; }
 
 	/// Ensure the sale is ended.
-	modifier when_ended { if (now >= endTime) _; else throw; }
+	modifier when_ended { require (now >= endTime); _; }
 
 	/// Ensure we're not halted.
-	modifier when_not_halted { if (!halted) _; else throw; }
+	modifier when_not_halted { require (!halted); _; }
 
 	/// Ensure all participants have finalised.
-	modifier when_all_finalised { if (allFinalised()) _; else throw; }
+	modifier when_all_finalised { require (allFinalised()); _; }
 
 	/// Ensure the sender sent a sensible amount of ether.
-	modifier avoid_dust { if (msg.value >= DUST_LIMIT) _; else throw; }
+	modifier avoid_dust { require (msg.value >= DUST_LIMIT); _; }
 
 	/// Ensure `_who` is a participant.
-	modifier only_participants(address _who) { if (participants[_who] != 0) _; else throw; }
+	modifier only_participants(address _who) { require (participants[_who].value != 0); _; }
 
 	/// Ensure sender is admin.
-	modifier only_admin { if (msg.sender == admin) _; else throw; }
+	modifier only_admin { require (msg.sender == admin); _; }
 
 	/// Ensure that the signature is valid.
-	modifier only_signed(address who, uint8 v, bytes32 r, bytes32 s) { if (ecrecover(STATEMENT_HASH, v, r, s) == who) _; else throw; }
+	modifier only_signed(address who, uint8 v, bytes32 r, bytes32 s) { require (ecrecover(STATEMENT_HASH, v, r, s) == who); _; }
 
 	/// Ensure sender is not a contract.
-	modifier only_basic(address who) { if (isBasicAccount(who)) _; else throw; }
+	modifier only_basic(address who) { require (isBasicAccount(who)); _; }
 
     /// Ensure sender has signed the contract.
-	modifier only_certified(address who) { if (certifier.certified(who)) _; else throw; }
+	modifier only_certified(address who) { require (certifier.certified(who)); _; }
 
 	// State:
 
+	struct Participant {
+		uint128 value;
+		uint128 bonus;
+	}
+
 	/// The auction participants.
-	mapping (address => uint) public participants;
+	mapping (address => Participant) public participants;
 
 	/// Total amount of ether received.
 	uint public totalReceived = 0;

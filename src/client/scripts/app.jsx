@@ -11,8 +11,9 @@ function formatBalance(c) { return `${+c.div(1000000000000000000)} ether`; }
 
 //var DutchAuction = singleton(() => bonds.makeContract('0x740C644B44d2B46EbDA31E6F87e3f4cA62120e0A', DutchAuctionABI));
 //var DutchAuction = singleton(() => bonds.makeContract('0x856EDD7F20d39f6Ef560a7B118a007A9Bc5CAbfD', DutchAuctionABI));
-var DutchAuction = singleton(() => bonds.makeContract('0xC695F252Cb68021E99E020ebd3e817a82ADEe17F', DutchAuctionABI));
+//var DutchAuction = singleton(() => bonds.makeContract('0xC695F252Cb68021E99E020ebd3e817a82ADEe17F', DutchAuctionABI));
 //var DutchAuction = singleton(() => bonds.makeContract('0xe643110fBa0b7a72BA454B0AE98c5Cb6345fe34A', DutchAuctionABI));
+var DutchAuction = singleton(() => bonds.makeContract('0x0F9b1129b309B29216b43Ea8a766AaeFb5324224', DutchAuctionABI));
 
 class ContributionPanel extends ReactiveComponent {
 	constructor() {
@@ -22,7 +23,7 @@ class ContributionPanel extends ReactiveComponent {
 		});
         let d = '10 ether';
         this.spend = new Bond;
-		this.theDeal = DutchAuction().theDeal(this.spend, bonds.me);
+		this.theDeal = DutchAuction().theDeal(this.spend);
 	}
 	render () {
 		return (<div id='contributionPanel'>
@@ -33,7 +34,7 @@ class ContributionPanel extends ReactiveComponent {
 			/>
 			<p style={{textAlign: 'center', margin: '1em 2em'}}>
 				By spending <InlineBalance value={this.spend}/>, you will receive <Rspan>{this.theDeal.map(([accepted, refund, price, bonus]) =>
-					<b>at least {Math.floor(accepted / price)} DOT</b>
+					<b>at least {Math.floor(accepted / price)} WLS</b>
 				)}</Rspan>
 				<Rspan>{this.theDeal.map(([_, r]) => r > 0
 					? <span>and get <InlineBalance value={r}/> refunded</span>
@@ -41,7 +42,7 @@ class ContributionPanel extends ReactiveComponent {
 				}</Rspan>.
 			</p>
 			<TransactButton
-				content="Purchase DOTs"
+				content="Purchase WLSs"
 				tx={()=>this.props.onContribute(this.spend, this.state.signature)}
 				disabled={this.spend.map(s => !this.state.signature || !s || +s < +this.state.minPurchase || (this.state.request && !this.state.request.failed && !this.state.request.confirmed))}
 			/>
@@ -132,10 +133,10 @@ class Subtitling extends ReactiveComponent {
 		let minFinal = Bond.all([DutchAuction().tokenCap(), DutchAuction().totalReceived()]).map(([a, b]) => b.div(a));
 		return this.state.isActive ?
 			(<p>
-				<Rspan>{DutchAuction().tokenCap().map(t => `${t}`)}</Rspan> DOTs to be sold! <br/>
+				<Rspan>{DutchAuction().tokenCap().map(t => `${t}`)}</Rspan> WLSs to be sold! <br/>
 				<InlineBalance value={DutchAuction().totalReceived()}/> raised so far!<br/>
 				Auction will close <Rspan>{DutchAuction().endTime().map(t => moment.unix(t).fromNow())}</Rspan> <i>at the latest</i>!<br/>
-				Final price will be at least <InlineBalance value={minFinal}/> per DOT!
+				Final price will be at least <InlineBalance value={minFinal}/> per WLS!
 			</p>) :
 			+this.state.totalReceived > 0 ?
 			(<p>
@@ -157,7 +158,7 @@ class AuctionSummary extends ReactiveComponent {
 			(<div>
 			  <div className={'title'}>Auction<br />Summary</div>
 			  <div className={'field'}>
-				<div>DOTs Left</div>
+				<div>WLSs Left</div>
 				<Rdiv
 					className='_fieldValue _basic'
 				>{DutchAuction().tokensAvailable().map(t => `${t}`)}</Rdiv>
@@ -202,7 +203,7 @@ class AuctionSummary extends ReactiveComponent {
 
 export class App extends ReactiveComponent {
 	constructor() {
-		super([], { purchased: bonds.accounts.mapEach(a => DutchAuction().participants(a)).map(bs => bs.reduce((x, a) => x.add(a))) });
+		super([], { purchased: bonds.accounts.mapEach(a => DutchAuction().participants(a)).map(bs => bs.reduce((x, a) => [x[0].add(a[0]), x[1].add(a[1])])) });
 		window.bonds = bonds;
 		window.DutchAuction = DutchAuction;
 		window.formatBalance = formatBalance;
@@ -226,7 +227,7 @@ export class App extends ReactiveComponent {
 				  <div className='row'>
 					<div id='status'>
 					  <div id='status-title'>
-						<h1>Get yer <span style={{fontSize: '21pt'}}>DOT</span>s!</h1>
+						<h1>Get yer <span style={{fontSize: '21pt'}}>WLS</span>s!</h1>
 						<Subtitling />
 					  </div>
 					  <div className='status-rest'>
@@ -260,7 +261,7 @@ export class App extends ReactiveComponent {
 			  {
 				+purchased == 0 ? null : (<section className='state-main'>
 					<div className='container'>
-					  You spent <InlineBalance value={purchased} /> to buy at least <Rspan>{DutchAuction().currentPrice().map(_ => ''+Math.floor(purchased.mul(1000).div(_)) / 1000)}</Rspan> DOT
+					  You spent <InlineBalance value={purchased[0].sub(purchased[1])} /> to buy at least <Rspan>{DutchAuction().currentPrice().map(_ => ''+Math.floor(purchased[0].mul(1000).div(_)) / 1000)}</Rspan> WLS
 					</div>
 				</section>)
 			  }
@@ -276,7 +277,7 @@ export class App extends ReactiveComponent {
 			<footer className='page-footer'>
 			  <div className='container'>
 				<div className='row'>
-				  <h1>The Dutch Crowd Auction ÐApp.</h1>
+				  <h1>The Second Price Auction ÐApp.</h1>
 				  Made with &lt;3 by Parity Technologies, 2017.
 				</div>
 			  </div>
