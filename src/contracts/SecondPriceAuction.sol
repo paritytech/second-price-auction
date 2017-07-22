@@ -46,7 +46,7 @@ contract SecondPriceAuction {
 		treasury = _treasury;
 		admin = _admin;
 		beginTime = _beginTime;
-		tokenCap = _tokenCap * DIVISOR;
+		tokenCap = _tokenCap;
 		endTime = beginTime + 1000000;
 	}
 
@@ -72,7 +72,8 @@ contract SecondPriceAuction {
 		// record the acceptance.
 		participants[msg.sender].value += uint128(accepted);
 		participants[msg.sender].bonus += uint128(bonus);
-		totalReceived += accepted;
+		totalAccounted += accepted;
+		totalReceived += accepted - bonus;
 		endTime = calculateEndTime();
 		Buyin(msg.sender, accepted, refund, price, bonus);
 
@@ -102,7 +103,8 @@ contract SecondPriceAuction {
 
 		participants[_who].value += uint128(accepted);
 		participants[_who].bonus += uint128(bonus);
-		totalReceived += accepted;
+		totalAccounted += accepted;
+		totalReceived += accepted - bonus;
 		endTime = calculateEndTime();
 		PrepayBuyin(_who, accepted, price, bonus);
 	}
@@ -117,7 +119,8 @@ contract SecondPriceAuction {
 
 		participants[_who].value += value;
 		participants[_who].bonus += bonus;
-		totalReceived += value;
+		totalAccounted += value;
+		totalReceived += _spent;
 		endTime = calculateEndTime();
 		Injected(_who, value, bonus);
 	}
@@ -130,7 +133,7 @@ contract SecondPriceAuction {
 	{
 		// end the auction if we're the first one to finalise.
 		if (endPrice == 0) {
-			endPrice = totalReceived / tokenCap;
+			endPrice = totalAccounted / tokenCap;
 			Ended(endPrice);
 		}
 
@@ -143,7 +146,7 @@ contract SecondPriceAuction {
 
 		Finalised(_who, tokens);
 
-		if (totalFinalised == totalReceived) {
+		if (totalFinalised == totalAccounted) {
 			Retired();
 		}
 	}
@@ -163,11 +166,11 @@ contract SecondPriceAuction {
 
 	/// The current end time of the sale assuming that nobody else buys in.
 	function calculateEndTime() constant returns (uint) {
-		return beginTime + 92160000000000 * USDWEI / (totalReceived + 25000000 * USDWEI) - 5760;
+		return beginTime + 92160000000000 * USDWEI / (totalAccounted + 25000000 * USDWEI) - 5760;
 	}
 
-	/// The current price for a single token. If a buyin happens now, this is
-	/// the highest price per token that the buyer will pay. This doesn't
+	/// The current price for a single (possibly divisible) token. If a buyin happens now, this is
+	/// the highest price per whole token that the buyer will pay. This doesn't
 	/// include the discount which may be available.
 	function currentPrice() constant returns (uint weiPerToken) {
 		if (!isActive()) return 0;
@@ -177,14 +180,14 @@ contract SecondPriceAuction {
 	/// Returns the tokens available for purchase right now.
 	function tokensAvailable() constant returns (uint tokens) {
 		if (!isActive()) return 0;
-		return tokenCap - totalReceived / currentPrice();
+		return tokenCap - totalAccounted / currentPrice();
 	}
 
 	/// The largest purchase than can be made at present, not including any
 	/// discount.
 	function maxPurchase() constant returns (uint spend) {
 		if (!isActive()) return 0;
-		return tokenCap * currentPrice() - totalReceived;
+		return tokenCap * currentPrice() - totalAccounted;
 	}
 
 	/// Get the number of `tokens` that would be given if the sender were to
@@ -228,7 +231,7 @@ contract SecondPriceAuction {
 	function isActive() constant returns (bool) { return now >= beginTime && now < endTime; }
 
 	/// True if all participants have finalised.
-	function allFinalised() constant returns (bool) { return now >= endTime && totalReceived == totalFinalised; }
+	function allFinalised() constant returns (bool) { return now >= endTime && totalAccounted == totalFinalised; }
 
 	/// Returns true if the sender of this transaction is a basic account.
 	function isBasicAccount(address _who) internal returns (bool) {
@@ -287,8 +290,11 @@ contract SecondPriceAuction {
 	/// The auction participants.
 	mapping (address => Participant) public participants;
 
-	/// Total amount of ether received, including phantom "bonus" ether.
+	/// Total amount of ether received, excluding phantom "bonus" ether.
 	uint public totalReceived = 0;
+
+	/// Total amount of ether received, including phantom "bonus" ether.
+	uint public totalAccounted = 0;
 
 	/// Total amount of ether which has been finalised.
 	uint public totalFinalised = 0;
@@ -355,6 +361,6 @@ contract SecondPriceAuction {
 	/// Number of Wei in one USD, constant.
 	uint constant public USDWEI = 1 ether / 200;
 
-	/// Token subdivisibility.
+	/// Divisor of the token.
 	uint constant public DIVISOR = 1000;
 }

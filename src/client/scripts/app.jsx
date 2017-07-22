@@ -13,7 +13,7 @@ function formatBalance(c) { return `${+c.div(1000000000000000000)} ether`; }
 //var DutchAuction = singleton(() => bonds.makeContract('0x856EDD7F20d39f6Ef560a7B118a007A9Bc5CAbfD', DutchAuctionABI));
 //var DutchAuction = singleton(() => bonds.makeContract('0xC695F252Cb68021E99E020ebd3e817a82ADEe17F', DutchAuctionABI));
 //var DutchAuction = singleton(() => bonds.makeContract('0xe643110fBa0b7a72BA454B0AE98c5Cb6345fe34A', DutchAuctionABI));
-var DutchAuction = singleton(() => bonds.makeContract('0xF814452bBAFdC6cb91fe82622633ba2a77986D6E', DutchAuctionABI));
+var DutchAuction = singleton(() => bonds.makeContract('0x2555734521a313a93Cc8d9bEB3B86D7B11F50ADF', DutchAuctionABI));
 
 const divisor = 1000;
 
@@ -169,7 +169,7 @@ class AuctionSummary extends ReactiveComponent {
 				<div>Current Price</div>
 				<div
 					className='_fieldValue _basic'
-				><InlineBalance value={DutchAuction().currentPrice()} defaultDenom='finney'/></div>
+				><InlineBalance value={DutchAuction().currentPrice().map(x => x.times(1000))} defaultDenom='finney'/></div>
 			  </div>
 			  <div className={'field'}>
 				<div>Max Purchase</div>
