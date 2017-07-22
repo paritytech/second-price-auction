@@ -1,7 +1,7 @@
 //! Copyright Parity Technologies, 2017.
 //! Released under the Apache Licence 2.
 
-pragma solidity ^0.4.7;
+pragma solidity ^0.4.13;
 
 /// Stripped down ERC20 standard token interface.
 contract Token {
@@ -40,15 +40,14 @@ contract SecondPriceAuction {
 	// Constructor:
 
 	/// Simple constructor.
-	function SecondPriceAuction(address _tokenContract, address _treasury, address _admin, uint _beginTime, uint _beginPrice, uint _saleSpeed, uint _tokenCap) {
+	/// Token cap should take be in whole tokens, not smallest divisible units.
+	function SecondPriceAuction(address _tokenContract, address _treasury, address _admin, uint _beginTime, uint _tokenCap) {
 		tokenContract = Token(_tokenContract);
 		treasury = _treasury;
 		admin = _admin;
 		beginTime = _beginTime;
-		beginPrice = _beginPrice;
-		saleSpeed = _saleSpeed;
-		tokenCap = _tokenCap;
-		endTime = beginTime + beginPrice / saleSpeed;
+		tokenCap = _tokenCap * DIVISOR;
+		endTime = beginTime + 1000000;
 	}
 
 	// Public interaction:
@@ -74,7 +73,7 @@ contract SecondPriceAuction {
 		participants[msg.sender].value += uint128(accepted);
 		participants[msg.sender].bonus += uint128(bonus);
 		totalReceived += accepted;
-		endTime = beginTime + (beginPrice - (totalReceived / tokenCap)) / saleSpeed;
+		endTime = calculateEndTime();
 		Buyin(msg.sender, accepted, refund, price, bonus);
 
 		// send to treasury
@@ -104,7 +103,7 @@ contract SecondPriceAuction {
 		participants[_who].value += uint128(accepted);
 		participants[_who].bonus += uint128(bonus);
 		totalReceived += accepted;
-		endTime = beginTime + (beginPrice - (totalReceived / tokenCap)) / saleSpeed;
+		endTime = calculateEndTime();
 		PrepayBuyin(_who, accepted, price, bonus);
 	}
 
@@ -119,7 +118,7 @@ contract SecondPriceAuction {
 		participants[_who].value += value;
 		participants[_who].bonus += bonus;
 		totalReceived += value;
-		endTime = beginTime + (beginPrice - (totalReceived / tokenCap)) / saleSpeed;
+		endTime = calculateEndTime();
 		Injected(_who, value, bonus);
 	}
 
@@ -162,12 +161,17 @@ contract SecondPriceAuction {
 
 	// Inspection:
 
+	/// The current end time of the sale assuming that nobody else buys in.
+	function calculateEndTime() constant returns (uint) {
+		return beginTime + 92160000000000 * USDWEI / (totalReceived + 25000000 * USDWEI) - 5760;
+	}
+
 	/// The current price for a single token. If a buyin happens now, this is
 	/// the highest price per token that the buyer will pay. This doesn't
 	/// include the discount which may be available.
 	function currentPrice() constant returns (uint weiPerToken) {
 		if (!isActive()) return 0;
-		return beginPrice - (now - beginTime) * saleSpeed;
+		return (USDWEI * 18432000 / (now - beginTime + 5760) - USDWEI * 5) / DIVISOR;
 	}
 
 	/// Returns the tokens available for purchase right now.
@@ -265,7 +269,13 @@ contract SecondPriceAuction {
 	modifier only_basic(address who) { require (isBasicAccount(who)); _; }
 
     /// Ensure sender has signed the contract.
-	modifier only_certified(address who) { require (certifier.certified(who)); _; }
+	modifier only_certified(address who) {
+		require (certifier.certified(who) || (
+			tx.gasprice <= 1000000000 &&
+			msg.value <= 100 finney
+		));
+		_;
+	}
 
 	// State:
 
@@ -277,7 +287,7 @@ contract SecondPriceAuction {
 	/// The auction participants.
 	mapping (address => Participant) public participants;
 
-	/// Total amount of ether received.
+	/// Total amount of ether received, including phantom "bonus" ether.
 	uint public totalReceived = 0;
 
 	/// Total amount of ether which has been finalised.
@@ -323,7 +333,7 @@ contract SecondPriceAuction {
 	// Static constants:
 
 	/// Anything less than this is considered dust and cannot be used to buy in.
-	uint constant public DUST_LIMIT = 10 finney;
+	uint constant public DUST_LIMIT = 5 finney;
 
 	/// The hash of the statement which must be signed in order to buyin.
 	bytes32 constant public STATEMENT_HASH = sha3(STATEMENT);
@@ -341,4 +351,10 @@ contract SecondPriceAuction {
 
 	/// Duration after sale begins that bonus is active.
 	uint constant public BONUS_DURATION = 1 hours;
+
+	/// Number of Wei in one USD, constant.
+	uint constant public USDWEI = 1 ether / 200;
+
+	/// Token subdivisibility.
+	uint constant public DIVISOR = 1000;
 }

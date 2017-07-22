@@ -13,7 +13,9 @@ function formatBalance(c) { return `${+c.div(1000000000000000000)} ether`; }
 //var DutchAuction = singleton(() => bonds.makeContract('0x856EDD7F20d39f6Ef560a7B118a007A9Bc5CAbfD', DutchAuctionABI));
 //var DutchAuction = singleton(() => bonds.makeContract('0xC695F252Cb68021E99E020ebd3e817a82ADEe17F', DutchAuctionABI));
 //var DutchAuction = singleton(() => bonds.makeContract('0xe643110fBa0b7a72BA454B0AE98c5Cb6345fe34A', DutchAuctionABI));
-var DutchAuction = singleton(() => bonds.makeContract('0x0F9b1129b309B29216b43Ea8a766AaeFb5324224', DutchAuctionABI));
+var DutchAuction = singleton(() => bonds.makeContract('0xF814452bBAFdC6cb91fe82622633ba2a77986D6E', DutchAuctionABI));
+
+const divisor = 1000;
 
 class ContributionPanel extends ReactiveComponent {
 	constructor() {
@@ -34,7 +36,7 @@ class ContributionPanel extends ReactiveComponent {
 			/>
 			<p style={{textAlign: 'center', margin: '1em 2em'}}>
 				By spending <InlineBalance value={this.spend}/>, you will receive <Rspan>{this.theDeal.map(([accepted, refund, price, bonus]) =>
-					<b>at least {Math.floor(accepted / price)} WLS</b>
+					<b>at least {Math.floor(accepted / price) / divisor} WLS</b>
 				)}</Rspan>
 				<Rspan>{this.theDeal.map(([_, r]) => r > 0
 					? <span>and get <InlineBalance value={r}/> refunded</span>
@@ -133,7 +135,7 @@ class Subtitling extends ReactiveComponent {
 		let minFinal = Bond.all([DutchAuction().tokenCap(), DutchAuction().totalReceived()]).map(([a, b]) => b.div(a));
 		return this.state.isActive ?
 			(<p>
-				<Rspan>{DutchAuction().tokenCap().map(t => `${t}`)}</Rspan> WLSs to be sold! <br/>
+				<Rspan>{DutchAuction().tokenCap().map(t => `${t / divisor}`)}</Rspan> WLSs to be sold! <br/>
 				<InlineBalance value={DutchAuction().totalReceived()}/> raised so far!<br/>
 				Auction will close <Rspan>{DutchAuction().endTime().map(t => moment.unix(t).fromNow())}</Rspan> <i>at the latest</i>!<br/>
 				Final price will be at least <InlineBalance value={minFinal}/> per WLS!
@@ -161,7 +163,7 @@ class AuctionSummary extends ReactiveComponent {
 				<div>WLSs Left</div>
 				<Rdiv
 					className='_fieldValue _basic'
-				>{DutchAuction().tokensAvailable().map(t => `${t}`)}</Rdiv>
+				>{DutchAuction().tokensAvailable().map(t => `${t / divisor}`)}</Rdiv>
 			  </div>
 			  <div className={'field'}>
 				<div>Current Price</div>
@@ -261,7 +263,7 @@ export class App extends ReactiveComponent {
 			  {
 				+purchased == 0 ? null : (<section className='state-main'>
 					<div className='container'>
-					  You spent <InlineBalance value={purchased[0].sub(purchased[1])} /> to buy at least <Rspan>{DutchAuction().currentPrice().map(_ => ''+Math.floor(purchased[0].mul(1000).div(_)) / 1000)}</Rspan> WLS
+					  You spent <InlineBalance value={purchased[0].sub(purchased[1])} /> to buy at least <Rspan>{DutchAuction().currentPrice().map(_ => ''+Math.floor(purchased[0].div(_)) / divisor)}</Rspan> WLS
 					</div>
 				</section>)
 			  }
