@@ -1,5 +1,6 @@
 import moment from 'moment';
 import React from 'react';
+import BigNumber from 'bignumber.js';
 import {Button, Checkbox} from 'semantic-ui-react';
 import {Bond, TransformBond, ReactivePromise} from 'oo7';
 import {capitalizeFirstLetter, removeSigningPrefix, singleton, formatBlockNumber, bonds} from 'oo7-parity';
@@ -7,15 +8,140 @@ import {Rdiv, Rspan, ReactiveComponent} from 'oo7-react';
 import {AccountIcon, BalanceBond, TransactButton, SigningProgressLabel, InlineBalance} from 'parity-reactive-ui';
 import {DutchAuctionABI} from './abis.jsx';
 
-function formatBalance(c) { return `${+c.div(1000000000000000000)} ether`; }
+const tokenDivisor = 1000;
+const tokenTLA = 'WLS';
+
+class TokenBalance extends ReactiveComponent {
+	constructor () {
+		super(['value']);
+	}
+	readyRender () {
+		let n = Math.round(+this.state.value) / tokenDivisor;
+		return (<span><b>{n}</b> <span style={{fontSize: '85%'}}>{tokenTLA}</span></span>);
+	}
+}
+
+var drawSparkline = function(c, line, filled, cutoff) {
+	if (window.HTMLCanvasElement && c) {
+		let ctx = c.getContext('2d');
+		let height = c.height - 5;
+		let width = c.width;
+		let total = Math.min(line.length, cutoff);
+		let maxfilled = Math.max.apply(Math, filled);
+
+		let deriv = [];
+		for (var i = 0; i < line.length; ++i) {
+			deriv[i] = filled[i] / line[i];
+		}
+		let maxderiv = Math.max.apply(Math, deriv);
+
+		let max = 1; //maxfilled * 8;
+		let xstep = width / Math.max(line.length, 12 * 24 * 2);
+		let ystep = height / max;
+
+		/*if (window.devicePixelRatio) {
+			c.width = c.width * window.devicePixelRatio;
+			c.height = c.height * window.devicePixelRatio;
+			c.style.width = (c.width / window.devicePixelRatio) + 'px';
+			c.style.height = (c.height / window.devicePixelRatio) + 'px';
+			c.style.display = 'inline-block';
+			ctx.resetTransform();
+			ctx.scale(window.devicePixelRatio, window.devicePixelRatio);
+		}*/
+		ctx.clearRect(0, 0, width, height);
+/*
+		{
+			ctx.beginPath();
+			ctx.strokeStyle = 'red';
+			let x = 0;
+			let y = height - line[0] * ystep;
+			ctx.moveTo(x, y);
+			for (let i = 1; i < total; i = i + 1) {
+				x = x + xstep;
+				y = height - line[i] * ystep + 2;
+				ctx.lineTo(x, y);
+			}
+			ctx.stroke();
+		}
+
+		{
+			ctx.beginPath();
+			ctx.strokeStyle = 'blue';
+			let x = 0;
+			let y = height - filled[0] * ystep;
+			ctx.moveTo(x, y);
+			for (let i = 1; i < total; i = i + 1) {
+				x = x + xstep;
+				y = height + 2 - Math.max(1, filled[i] * ystep);
+				ctx.moveTo(x, height + 2);
+				ctx.lineTo(x, y);
+			}
+			ctx.stroke();
+		}
+*/
+		{
+			let x = 0;
+			let y = height - 4 - deriv[0] * ystep;
+			for (let i = 1; i < total; ++i) {
+				ctx.beginPath();
+				ctx.moveTo(x, y);
+				x = x + xstep;
+				y = height - 4 - deriv[i] * ystep;
+//				ctx.moveTo(x, height + 2);
+				let a = Math.max(0.25, (i - total + 100) / 100);
+				ctx.strokeStyle = `rgba(255, 255, 255, ${a})`;
+				ctx.lineWidth = 1 + Math.max(0, (i - total + 100) / 50);
+				ctx.lineTo(x, y);
+				ctx.stroke();
+			}
+		}
+
+
+/*
+		if (endpoint && style == 'line') {
+			ctx.beginPath();
+			ctx.fillStyle = 'rgba(255,0,0,0.5)';
+			ctx.arc(x, y, 1.5, 0, Math.PI*2);
+			ctx.fill();
+		}*/
+	}
+};
+
+class Eras extends ReactiveComponent {
+	constructor () {
+		super(['data']);
+		this.state = { cutoff: 0 };
+	}
+	componentDidMount () {
+		this.t = window.setInterval(() => {
+			if (this.state.data) {
+				if (this.state.cutoff >= this.state.data.erasCap.length) {
+					window.clearInterval(this.t);
+				} else {
+					this.setState({ cutoff: this.state.cutoff + 5 });
+				}
+			}
+		}, 5);
+	}
+	componentWillUnmount () {
+		window.clearInterval(this.t);
+	}
+
+	updateCanvas (canvas) {
+		if (canvas) {
+			drawSparkline(canvas, this.state.data.erasCap, this.state.data.erasAccounted, this.state.cutoff);
+		}
+	}
+	readyRender () {
+		return (<canvas ref={this.updateCanvas.bind(this)} width={this.props.width} height={this.props.height}></canvas>);
+	}
+}
 
 //var DutchAuction = singleton(() => bonds.makeContract('0x740C644B44d2B46EbDA31E6F87e3f4cA62120e0A', DutchAuctionABI));
 //var DutchAuction = singleton(() => bonds.makeContract('0x856EDD7F20d39f6Ef560a7B118a007A9Bc5CAbfD', DutchAuctionABI));
 //var DutchAuction = singleton(() => bonds.makeContract('0xC695F252Cb68021E99E020ebd3e817a82ADEe17F', DutchAuctionABI));
 //var DutchAuction = singleton(() => bonds.makeContract('0xe643110fBa0b7a72BA454B0AE98c5Cb6345fe34A', DutchAuctionABI));
-var DutchAuction = singleton(() => bonds.makeContract('0x2555734521a313a93Cc8d9bEB3B86D7B11F50ADF', DutchAuctionABI));
-
-const divisor = 1000;
+var DutchAuction = singleton(() => bonds.makeContract('0x95b126c6Bf4EB0F44C958bA147BDC331b3F90349', DutchAuctionABI));
 
 class ContributionPanel extends ReactiveComponent {
 	constructor() {
@@ -36,7 +162,7 @@ class ContributionPanel extends ReactiveComponent {
 			/>
 			<p style={{textAlign: 'center', margin: '1em 2em'}}>
 				By spending <InlineBalance value={this.spend}/>, you will receive <Rspan>{this.theDeal.map(([accepted, refund, price, bonus]) =>
-					<b>at least {Math.floor(accepted / price) / divisor} WLS</b>
+					<b>at least <TokenBalance value={accepted / price}/></b>
 				)}</Rspan>
 				<Rspan>{this.theDeal.map(([_, r]) => r > 0
 					? <span>and get <InlineBalance value={r}/> refunded</span>
@@ -44,13 +170,15 @@ class ContributionPanel extends ReactiveComponent {
 				}</Rspan>.
 			</p>
 			<TransactButton
-				content="Purchase WLSs"
+				content={`Purchase ${tokenTLA}s`}
 				tx={()=>this.props.onContribute(this.spend, this.state.signature)}
 				disabled={this.spend.map(s => !this.state.signature || !s || +s < +this.state.minPurchase || (this.state.request && !this.state.request.failed && !this.state.request.confirmed))}
 			/>
 		</div>);
 	}
 }
+
+
 
 class TermsPanel extends ReactiveComponent {
 	constructor() {
@@ -132,18 +260,18 @@ class Subtitling extends ReactiveComponent {
 		super([], { isActive: DutchAuction().isActive(), allFinalised: DutchAuction().allFinalised(), totalReceived: DutchAuction().totalReceived() });
 	}
 	render () {
-		let minFinal = Bond.all([DutchAuction().tokenCap(), DutchAuction().totalReceived()]).map(([a, b]) => b.div(a));
+		let minFinal = Bond.all([DutchAuction().tokenCap(), DutchAuction().totalReceived()]).map(([a, b]) => b.div(a).mul(tokenDivisor));
 		return this.state.isActive ?
 			(<p>
-				<Rspan>{DutchAuction().tokenCap().map(t => `${t / divisor}`)}</Rspan> WLSs to be sold! <br/>
+				<TokenBalance value={DutchAuction().tokenCap()}/> to be sold!<br/>
 				<InlineBalance value={DutchAuction().totalReceived()}/> raised so far!<br/>
 				Auction will close <Rspan>{DutchAuction().endTime().map(t => moment.unix(t).fromNow())}</Rspan> <i>at the latest</i>!<br/>
-				Final price will be at least <InlineBalance value={minFinal}/> per WLS!
+				Final price will be at least <InlineBalance value={minFinal}/> per {tokenTLA}!
 			</p>) :
 			+this.state.totalReceived > 0 ?
 			(<p>
 				Auction closed <Rspan>{DutchAuction().endTime().map(t => moment.unix(t).fromNow())}</Rspan>:<br/>
-				{formatBalance(this.state.totalReceived)} raised in total!<br/>
+				<InlineBalance value={this.state.totalReceived} /> raised in total!<br/>
 			</p>) :
 			(<p>
 				Auction will begin <Rspan>{DutchAuction().beginTime().map(t => moment.unix(t).fromNow())}</Rspan>!
@@ -153,23 +281,23 @@ class Subtitling extends ReactiveComponent {
 
 class AuctionSummary extends ReactiveComponent {
 	constructor () {
-		super([], { isActive: DutchAuction().isActive(), allFinalised: DutchAuction().allFinalised(), totalReceived: DutchAuction().totalReceived() });
+		super([], { isActive: DutchAuction().isActive(), allFinalised: DutchAuction().allFinalised(), totalAccounted: DutchAuction().totalAccounted() });
 	}
 	render () {
+		console.log('totalAccounted', +this.state.totalAccounted);
 		return this.state.isActive ?
 			(<div>
-			  <div className={'title'}>Auction<br />Summary</div>
 			  <div className={'field'}>
-				<div>WLSs Left</div>
+				<div>{tokenTLA}s Left</div>
 				<Rdiv
 					className='_fieldValue _basic'
-				>{DutchAuction().tokensAvailable().map(t => `${t / divisor}`)}</Rdiv>
+				>{DutchAuction().tokensAvailable().map(t => `${t / tokenDivisor}`)}</Rdiv>
 			  </div>
 			  <div className={'field'}>
 				<div>Current Price</div>
 				<div
 					className='_fieldValue _basic'
-				><InlineBalance value={DutchAuction().currentPrice().map(x => x.times(1000))} defaultDenom='finney'/></div>
+				><InlineBalance value={DutchAuction().currentPrice().map(x => x.times(tokenDivisor))} defaultDenom='finney'/></div>
 			  </div>
 			  <div className={'field'}>
 				<div>Max Purchase</div>
@@ -178,17 +306,15 @@ class AuctionSummary extends ReactiveComponent {
 				><InlineBalance value={DutchAuction().maxPurchase()} defaultDenom='ether'/></div>
 			  </div>
 			</div>) :
-			+this.state.totalReceived > 0 ?
+			+this.state.totalAccounted > 0 ?
 			(<div>
 			  <div className={'title'}>Auction<br />Summary</div>
 			  <div className={'field'}></div>
 			  <div className={'field'}>
 				<div>Closing Price</div>
-				<Rdiv
-					className='_fieldValue _basic'
-				>{DutchAuction().tokenCap().map(r => `${this.state.totalReceived.div(1000000000000000000) / r} ETH`)}</Rdiv>
-			  </div>
-			  <div className={'field'}>
+				<div className='_fieldValue _basic'>
+					<InlineBalance value={DutchAuction().tokenCap().map(r => this.state.totalAccounted.div(r))} />
+				</div>
 			  </div>
 			</div>) :
 			(<div>
@@ -203,12 +329,65 @@ class AuctionSummary extends ReactiveComponent {
 	}
 }
 
+/*
+						  <div className='field'>
+							<div>Status</div>
+							<Rdiv
+							  className={bonds.peerCount.map(c => '_fieldValue ' + (c > 0 ? '_online' : '_offline'))}
+							>{bonds.peerCount.map(c => c > 0 ? '● Online' : '○ Offline')}</Rdiv>
+						  </div>
+						  <div className='field'>
+							<div>Network</div>
+							<Rdiv
+							  className={bonds.chainName.map(c => '_fieldValue _' + c)}
+							>{bonds.chainName.map(capitalizeFirstLetter)}</Rdiv>
+						  </div>
+						  <div className='field'>
+							<div>Number</div>
+							<Rdiv
+							  className='_fieldValue _basic'
+							>{bonds.height.map(formatBlockNumber)}</Rdiv>
+						  </div>
+*/
+
 export class App extends ReactiveComponent {
 	constructor() {
-		super([], { purchased: bonds.accounts.mapEach(a => DutchAuction().participants(a)).map(bs => bs.reduce((x, a) => [x[0].add(a[0]), x[1].add(a[1])])) });
+		super([], {
+			purchased: bonds.accounts.mapEach(a => DutchAuction().participants(a)).map(bs => bs.reduce((x, a) => [x[0].add(a[0]), x[1].add(a[1])])),
+			isActive: DutchAuction().isActive(),
+			allFinalised: DutchAuction().allFinalised(),
+			totalAccounted: DutchAuction().totalAccounted()
+		});
+		let earliestBlock = DutchAuction().Ticked({limit: 1}).map(x => x.blockNumber - 2*7*24*60*4);
+		let ticks = DutchAuction().Ticked({limit: 50000, startBlock: earliestBlock});
+		this.eras = Bond.mapAll([DutchAuction().ERA_PERIOD(), DutchAuction().tokenCap(), DutchAuction().USDWEI(), ticks], (eraPeriod, tokenCap, usdWei, ticks) => {
+			console.log('mapped', +eraPeriod, +usdWei, ticks);
+			let erasAccounted = [];
+			let erasCap = [];
+			if (ticks.length > 0) {
+				let last = ticks[ticks.length - 1].era;
+				for (let i = 0, j = 0; i < last; ++i) {
+					if (ticks[j].era > i) {
+						// will never be called when erasAccounted is empty, since a non-empty t's first element will always be era 0.
+						erasAccounted.push(erasAccounted[erasAccounted.length - 1]);
+					} else {
+						erasAccounted.push(+ticks[j].accounted);
+						j++;
+					}
+
+					let t = eraPeriod.mul(i);
+					erasCap.push(+tokenCap.div(1000).mul(usdWei.mul(18432000).div(t.add(5760)).sub(usdWei.mul(5))));
+				}
+			}
+			console.log('erasCap', erasCap);
+			console.log('erasAccounted', erasAccounted);
+			return {erasAccounted, erasCap};
+		});
+		window.ticks = ticks;
+		window.eras = this.eras;
 		window.bonds = bonds;
 		window.DutchAuction = DutchAuction;
-		window.formatBalance = formatBalance;
+		window.DutchAuctionABI = DutchAuctionABI;
 	}
 	render () {
 		let purchased = this.state.purchased;
@@ -229,31 +408,11 @@ export class App extends ReactiveComponent {
 				  <div className='row'>
 					<div id='status'>
 					  <div id='status-title'>
-						<h1>Get yer <span style={{fontSize: '21pt'}}>WLS</span>s!</h1>
+						<h1>Get yer <span style={{fontSize: '21pt'}}>{tokenTLA}</span>s!</h1>
 						<Subtitling />
 					  </div>
-					  <div className='status-rest'>
-						<div>
-						  <div className='title'>Network<br />Summary</div>
-						  <div className='field'>
-							<div>Status</div>
-							<Rdiv
-							  className={bonds.peerCount.map(c => '_fieldValue ' + (c > 0 ? '_online' : '_offline'))}
-							>{bonds.peerCount.map(c => c > 0 ? '● Online' : '○ Offline')}</Rdiv>
-						  </div>
-						  <div className='field'>
-							<div>Network</div>
-							<Rdiv
-							  className={bonds.chainName.map(c => '_fieldValue _' + c)}
-							>{bonds.chainName.map(capitalizeFirstLetter)}</Rdiv>
-						  </div>
-						  <div className='field'>
-							<div>Number</div>
-							<Rdiv
-							  className='_fieldValue _basic'
-							>{bonds.height.map(formatBlockNumber)}</Rdiv>
-						  </div>
-						</div>
+					  <div className='status-rest' style={{textAlign:'center'}}>
+				  	  	<Eras data={eras} width={400} height={96}/>
 						<AuctionSummary />
 					  </div>
 					</div>
@@ -263,7 +422,17 @@ export class App extends ReactiveComponent {
 			  {
 				+purchased == 0 ? null : (<section className='state-main'>
 					<div className='container'>
-					  You spent <InlineBalance value={purchased[0].sub(purchased[1])} /> to buy at least <Rspan>{DutchAuction().currentPrice().map(_ => ''+Math.floor(purchased[0].div(_)) / divisor)}</Rspan> WLS
+					  You spent <InlineBalance
+					  	value={purchased[0].sub(purchased[1])}
+					  /> to buy {this.state.isActive ? (
+						<span>at least <TokenBalance value={
+						  DutchAuction().currentPrice().map(_ => purchased[0].div(_))
+					    }/></span>
+					  ) : (
+					    <span>exactly <TokenBalance value={
+					      DutchAuction().tokenCap().map(r => purchased[0].mul(r).div(this.state.totalAccounted))
+						}/></span>
+					  )}
 					</div>
 				</section>)
 			  }

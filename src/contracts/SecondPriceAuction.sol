@@ -28,6 +28,9 @@ contract SecondPriceAuction {
 	/// Admin injected a purchase.
 	event PrepayBuyin(address indexed who, uint accepted, uint price, uint bonus);
 
+	/// At least 20 blocks have passed.
+	event Ticked(uint era, uint received, uint accounted);
+
 	/// The sale just ended with the current price.
 	event Ended(uint price);
 
@@ -63,6 +66,8 @@ contract SecondPriceAuction {
 		only_basic(msg.sender)
 		only_certified(msg.sender)
 	{
+		flushEra();
+
 		uint accepted;
 		uint refund;
 		uint price;
@@ -92,6 +97,8 @@ contract SecondPriceAuction {
 	    only_basic(_who)
 	    only_certified(_who)
 	{
+		flushEra();
+
 		uint accepted;
 		uint refund;
 		uint price;
@@ -151,6 +158,14 @@ contract SecondPriceAuction {
 		}
 	}
 
+	function flushEra() private {
+		uint currentEra = (now - beginTime) / ERA_PERIOD;
+		if (currentEra > eraIndex) {
+			Ticked(eraIndex, totalReceived, totalAccounted);
+		}
+		eraIndex = currentEra;
+	}
+
 	// Admin interaction:
 
 	/// Emergency function to pause buy-in and finalisation.
@@ -166,18 +181,19 @@ contract SecondPriceAuction {
 
 	/// The current end time of the sale assuming that nobody else buys in.
 	function calculateEndTime() constant returns (uint) {
-		return beginTime + 92160000000000 * USDWEI / (totalAccounted + 25000000 * USDWEI) - 5760;
+		var factor = tokenCap / DIVISOR * USDWEI;
+		return beginTime + 18432000 * factor / (totalAccounted + 5 * factor) - 5760;
 	}
 
-	/// The current price for a single (possibly divisible) token. If a buyin happens now, this is
-	/// the highest price per whole token that the buyer will pay. This doesn't
+	/// The current price for a single indivisible part of a token. If a buyin happens now, this is
+	/// the highest price per indivisible token part that the buyer will pay. This doesn't
 	/// include the discount which may be available.
-	function currentPrice() constant returns (uint weiPerToken) {
+	function currentPrice() constant returns (uint weiPerIndivisibleTokenPart) {
 		if (!isActive()) return 0;
 		return (USDWEI * 18432000 / (now - beginTime + 5760) - USDWEI * 5) / DIVISOR;
 	}
 
-	/// Returns the tokens available for purchase right now.
+	/// Returns the total indivisible token parts available for purchase right now.
 	function tokensAvailable() constant returns (uint tokens) {
 		if (!isActive()) return 0;
 		return tokenCap - totalAccounted / currentPrice();
@@ -326,15 +342,16 @@ contract SecondPriceAuction {
 	/// The time at which the sale begins.
 	uint public beginTime;
 
-	/// Price at which the sale begins.
-	uint public beginPrice;
-
-	/// The speed at which the price reduces, in Wei per second.
-	uint public saleSpeed;
-
-	/// Maximum amount of tokens to mint. Once totalSale / currentPrice is
+	/// Maximum amount of tokens to mint. Once totalAccounted / currentPrice is
 	/// greater than this, the sale ends.
 	uint public tokenCap;
+
+	// Era stuff (isolated)
+	/// The era for which the current consolidated data represents.
+	uint public eraIndex;
+
+	/// The size of the era in seconds.
+	uint constant public ERA_PERIOD = 5 minutes;
 
 	// Static constants:
 
