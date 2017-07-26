@@ -141,7 +141,7 @@ class Eras extends ReactiveComponent {
 //var DutchAuction = singleton(() => bonds.makeContract('0x856EDD7F20d39f6Ef560a7B118a007A9Bc5CAbfD', DutchAuctionABI));
 //var DutchAuction = singleton(() => bonds.makeContract('0xC695F252Cb68021E99E020ebd3e817a82ADEe17F', DutchAuctionABI));
 //var DutchAuction = singleton(() => bonds.makeContract('0xe643110fBa0b7a72BA454B0AE98c5Cb6345fe34A', DutchAuctionABI));
-var DutchAuction = singleton(() => bonds.makeContract('0x95b126c6Bf4EB0F44C958bA147BDC331b3F90349', DutchAuctionABI));
+var DutchAuction = singleton(() => bonds.makeContract('0x778E173cA5822777Aa7c37c83ee598ef38D774A3', DutchAuctionABI));
 
 class ContributionPanel extends ReactiveComponent {
 	constructor() {
@@ -308,17 +308,16 @@ class AuctionSummary extends ReactiveComponent {
 			</div>) :
 			+this.state.totalAccounted > 0 ?
 			(<div>
-			  <div className={'title'}>Auction<br />Summary</div>
 			  <div className={'field'}></div>
 			  <div className={'field'}>
 				<div>Closing Price</div>
 				<div className='_fieldValue _basic'>
-					<InlineBalance value={DutchAuction().tokenCap().map(r => this.state.totalAccounted.div(r))} />
+					<InlineBalance value={DutchAuction().tokenCap().map(r => this.state.totalAccounted.mul(divisor).div(r))} />
 				</div>
 			  </div>
+			  <div className={'field'}></div>
 			</div>) :
 			(<div>
-			  <div className={'title'}>Auction<br />Summary</div>
 			  <div className={'field'}></div>
 			  <div className={'field'}>
 				<div>Not yet started</div>
