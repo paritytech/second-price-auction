@@ -32,13 +32,13 @@ var drawSparkline = function(c, line, filled, cutoff) {
 
 		let deriv = [];
 		for (var i = 0; i < line.length; ++i) {
-			deriv[i] = filled[i] / line[i];
+			deriv[i] = filled[i];// / line[i];
 		}
 		let maxderiv = Math.max.apply(Math, deriv);
 
 		let max = 1; //maxfilled * 8;
 		let xstep = width / Math.max(line.length, 12 * 24 * 2);
-		let ystep = height / max;
+		let ystep = (height - 6) / maxderiv;
 
 		/*if (window.devicePixelRatio) {
 			c.width = c.width * window.devicePixelRatio;
@@ -226,6 +226,11 @@ let contributionStatus = singleton(() => new TransformBond((h, b, e, c) =>
     bonds.head.timestamp.map(t => t / 1000)
 ]));
 
+const states = {
+	us: false,
+	uk: false
+};
+
 class Manager extends ReactiveComponent {
 	constructor() {
 		super([], {
@@ -250,17 +255,16 @@ class Manager extends ReactiveComponent {
 		return t;
 	}
 	render () {
-
         return (this.state.status && this.state.status.active)
           ? this.state.kyc === ''
 		  ? (<h2 style={{textAlign: 'center', margin: '10em'}}>This account is not registered to any identity. Please ensure you have associated the account with a valid document through any of the identity providers.</h2>)
 		  : this.state.kyc === 'jp'
-		  ? (<h2 style={{textAlign: 'center', margin: '10em'}}>This account belongs to a Japanese citizen. Unfortunately, Japanese are not elegable to join this crowdsale due to requirements placed on token sales by the Japanese authorities.</h2>)
-		  : (<div>
+		  ? (<h2 style={{textAlign: 'center', margin: '10em'}}>Unfortunately, Japanese are not elegable to join this crowdsale due to requirements placed on token sales by the Japanese authorities.</h2>)
+		  : (<div><h2 style={{textAlign: 'center', margin: '2em'}}>This account belongs to an OFAC-clean citizen of {countries.getName(this.state.kyc, "en")}.</h2>
 			  {
-				  this.state.kyc === 'uk' || this.state.kyc == 'us'
-				  ? (<h2 style={{textAlign: 'center', margin: '2em'}}>This account is KYCed to a US/UK citizen. Fully-refundable deposits are allowed, but outright spending is prohibited due to unclear regulations concerning the sale of illiquid tokens.</h2>)
-				  : (<h2 style={{textAlign: 'center', margin: '2em'}}>This account is fully KYCed as an OFAC-clean citizen of {countries.getName(this.state.kyc, "en")}.</h2>)
+				  this.state.kyc === 'uk' || this.state.kyc === 'us'
+				  ? (<h2 style={{textAlign: 'center', margin: '2em'}}>Unfortunately, due to unclear regulations of your government concerning the pre-sale of illiquid tokens, fully-refundable deposits are allowed, but outright spending is prohibited.</h2>)
+				  : null
 			  }
 			  <section id='terms'>
 				<h1>Terms and Conditions</h1>
@@ -273,7 +277,7 @@ class Manager extends ReactiveComponent {
 			  <section id='action'>
 				<h1>Send Funds</h1>
 				<ContributionPanel
-				  depositOnly={this.state.kyc === 'uk' || this.state.kyc === 'us'}
+				  depositOnly={states[this.state.kyc] === false}
 				  signature={this.state.signing ? this.state.signing.map(s => (s && s.signed || null)) : null}
 	              request={this.state.contribution}
 	              onContribute={this.handleContribute.bind(this)}
@@ -390,21 +394,33 @@ export class App extends ReactiveComponent {
 		});
 		let earliestBlock = DutchAuction().Ticked({limit: 1}).map(x => x.blockNumber - 2*7*24*60*4);
 		let ticks = DutchAuction().Ticked({limit: 50000, startBlock: earliestBlock});
-		this.eras = Bond.mapAll([DutchAuction().ERA_PERIOD(), DutchAuction().tokenCap(), DutchAuction().USDWEI(), ticks], (eraPeriod, tokenCap, usdWei, ticks) => {
-			console.log('mapped', +eraPeriod, +usdWei, ticks);
+		this.eras = Bond.mapAll([
+			DutchAuction().ERA_PERIOD(),
+			DutchAuction().tokenCap(),
+			DutchAuction().USDWEI(),
+			ticks,
+			DutchAuction().totalAccounted(),
+			Bond.mapAll([
+				DutchAuction().ERA_PERIOD(),
+				DutchAuction().beginTime(),
+				bonds.time
+			], (p, b, n) => Math.ceil((n / 1000 - b) / p))
+		], (eraPeriod, tokenCap, usdWei, ticks, accountedNow, era) => {
+			console.log('mapped', +eraPeriod, +usdWei, ticks, era);
 			let erasAccounted = [];
 			let erasCap = [];
 			if (ticks.length > 0) {
-				let last = ticks[ticks.length - 1].era;
+				let last = Math.max(era, ticks[ticks.length - 1].era);
 				for (let i = 0, j = 0; i < last; ++i) {
-					if (ticks[j].era > i) {
-						// will never be called when erasAccounted is empty, since a non-empty t's first element will always be era 0.
-						erasAccounted.push(erasAccounted[erasAccounted.length - 1]);
+					if (j >= ticks.length) {
+						erasAccounted.push(+accountedNow);
+					}
+					else if (ticks[j].era > i) {
+						erasAccounted.push(erasAccounted.length > 0 ? erasAccounted[erasAccounted.length - 1] : 0);
 					} else {
 						erasAccounted.push(+ticks[j].accounted);
 						j++;
 					}
-
 					let t = eraPeriod.mul(i);
 					erasCap.push(+tokenCap.div(1000).mul(usdWei.mul(18432000).div(t.add(5760)).sub(usdWei.mul(5))));
 				}
