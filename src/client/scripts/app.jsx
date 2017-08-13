@@ -428,8 +428,8 @@ export class App extends ReactiveComponent {
 			  <nav className='nav-header'>
 				<div className='container'>
 				  <span id='logo'>
-					<AccountIcon address={DutchAuction().address} id='logoIcon'/>
-					WHITELABEL
+					<AccountIcon address={DutchAuction().address} id='logoIcon' style={{width: '3em', marginTop: '0.5em', boxShadow: '0px 2px 30px 0px #000'}}/>
+					<span style={{marginLeft: '1em'}}>WHITELABEL</span>
 				  </span>
 				</div>
 			  </nav>
@@ -454,11 +454,13 @@ export class App extends ReactiveComponent {
 			  {
 				+purchased[1] == 0 && +deposited[1] == 0 ? null : (<section className='state-main'>
 					<div className='container'>
-					  You spent <InlineBalance
+					  You {+purchased[1] > 0 ? (<span>spent <InlineBalance
 					  	value={purchased[1]}
-					  /> and deposited <InlineBalance
+					  /></span>) : null}
+					  {+purchased[1] > 0 && +deposited[1] > 0 ? ' and ' : ''}
+					  {+purchased[1] > 0 ? (<span> deposited <InlineBalance
 					  	value={deposited[1]}
-					  /> to buy {this.state.isActive ? (
+					  /></span>) : null} to buy {this.state.isActive ? (
 						<span>at least <TokenBalance value={
 						  DutchAuction().currentPrice().map(_ => purchased[0].add(deposited[0]).div(_))
 					    }/></span>
