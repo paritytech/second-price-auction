@@ -1,16 +1,85 @@
 //! Copyright Parity Technologies, 2017.
 //! Released under the Apache Licence 2.
 
-pragma solidity ^0.4.13;
+pragma solidity ^0.4.15;
 
 /// Stripped down ERC20 standard token interface.
 contract Token {
 	function transfer(address _to, uint256 _value) returns (bool success);
 }
 
-/// Stripped Badge token interface.
+
+// From Owned.sol
+contract Owned {
+	modifier only_owner { if (msg.sender != owner) return; _; }
+
+	event NewOwner(address indexed old, address indexed current);
+
+	function setOwner(address _new) only_owner { NewOwner(owner, _new); owner = _new; }
+
+	address public owner = msg.sender;
+}
+
+// From Certifier.sol
 contract Certifier {
-	function certified(address _who) constant returns (bool);
+	event Confirmed(address indexed who);
+	event Revoked(address indexed who);
+	function certified(address) constant returns (bool);
+	function get(address, string) constant returns (bytes32) {}
+	function getAddress(address, string) constant returns (address) {}
+	function getUint(address, string) constant returns (uint) {}
+}
+
+contract CCCertifier is Certifier {
+	function getCountryCode(address _who) constant returns (bytes2);
+}
+
+/**
+ * Contract to allow multiple parties to collaborate over a certification contract.
+ * Each certified account is associated with the delegate who certified it.
+ * Delegates can be added and removed only by the contract owner.
+ */
+contract MultiCertifier is Owned, CCCertifier {
+	modifier only_delegate { require (msg.sender == owner || delegates[msg.sender]); _; }
+	modifier only_certifier_of(address who) { require (msg.sender == owner || msg.sender == certs[who].certifier); _; }
+	modifier only_certified(address who) { require (certs[who].active); _; }
+	modifier only_uncertified(address who) { require (!certs[who].active); _; }
+
+	event Confirmed(address indexed who, address indexed by, bytes2 indexed countryCode);
+	event Revoked(address indexed who, address indexed by);
+
+	struct Certification {
+		address certifier;
+		bytes2 countryCode;
+		bool active;
+	}
+
+	function certify(address _who, bytes2 _countryCode)
+		only_delegate
+		only_uncertified(_who)
+	{
+		certs[_who].active = true;
+		certs[_who].certifier = msg.sender;
+		certs[_who].countryCode = _countryCode;
+		Confirmed(_who, msg.sender, _countryCode);
+	}
+
+	function revoke(address _who)
+		only_certifier_of(_who)
+		only_certified(_who)
+	{
+		certs[_who].active = false;
+		Revoked(_who, msg.sender);
+	}
+
+	function certified(address _who) constant returns (bool) { return certs[_who].active; }
+	function getCertifier(address _who) constant returns (address) { return certs[_who].certifier; }
+	function getCountryCode(address _who) constant returns (bytes2) { return certs[_who].countryCode; }
+	function addDelegate(address _new) only_owner { delegates[_new] = true; }
+	function removeDelegate(address _old) only_owner { delete delegates[_old]; }
+
+	mapping (address => Certification) certs;
+	mapping (address => bool) delegates;
 }
 
 /// Simple Dutch Auction contract. Price starts high and monotonically decreases
@@ -20,13 +89,22 @@ contract SecondPriceAuction {
 	// Events:
 
 	/// Someone bought in at a particular max-price.
-	event Buyin(address indexed who, uint accepted, uint refund, uint price, uint bonus);
+	event Buyin(address indexed who, uint accounted, uint received, uint price);
+
+	/// Someone deposited in at a particular max-price.
+	event Deposited(address indexed who, uint accounted, uint received, uint price);
+
+	/// Someone moved their Ether out of the contract.
+	event DepositReturned(address indexed who, uint amount);
+
+	/// Someone moved their Ether out of the contract.
+	event DepositUsed(address indexed who, uint accounted, uint received);
 
 	/// Admin injected a purchase.
-	event Injected(address indexed who, uint accepted, uint bonus);
+	event Injected(address indexed who, uint accounted, uint received);
 
 	/// Admin injected a purchase.
-	event PrepayBuyin(address indexed who, uint accepted, uint price, uint bonus);
+	event PrepayBuyin(address indexed who, uint accounted, uint received, uint price);
 
 	/// At least 20 blocks have passed.
 	event Ticked(uint era, uint received, uint accounted);
@@ -64,28 +142,88 @@ contract SecondPriceAuction {
 		avoid_dust
 		only_signed(msg.sender, v, r, s)
 		only_basic(msg.sender)
+		only_certified_non_us(msg.sender)
+	{
+		flushEra();
+
+		uint accounted;
+		bool refund;
+		uint price;
+		(accounted, refund, price) = theDeal(msg.value, false);
+
+		/// No refunds allowed.
+		require (!refund);
+
+		// record the acceptance.
+		buyins[msg.sender].accounted += uint128(accounted);
+		buyins[msg.sender].received += uint128(msg.value);
+		totalAccounted += accounted;
+		totalReceived += msg.value;
+		endTime = calculateEndTime();
+		Buyin(msg.sender, accounted, msg.value, price);
+
+		// send to treasury
+		require (treasury.send(msg.value));
+	}
+
+	function deposit(uint8 v, bytes32 r, bytes32 s)
+		payable
+		when_not_halted
+		when_active
+		avoid_dust
+		only_signed(msg.sender, v, r, s)
+		only_basic(msg.sender)
 		only_certified(msg.sender)
 	{
 		flushEra();
 
-		uint accepted;
-		uint refund;
+		uint accounted;
+		bool refund;
 		uint price;
-		uint bonus;
-		(accepted, refund, price, bonus) = theDeal(msg.value);
+		(accounted, refund, price) = theDeal(msg.value, true);
+
+		/// No refunds allowed.
+		require (!refund);
 
 		// record the acceptance.
-		participants[msg.sender].value += uint128(accepted);
-		participants[msg.sender].bonus += uint128(bonus);
-		totalAccounted += accepted;
-		totalReceived += accepted - bonus;
+		deposits[msg.sender].accounted += uint128(accounted);
+		deposits[msg.sender].received += uint128(msg.value);
+		totalAccounted += accounted;
+		totalReceived += msg.value;
 		endTime = calculateEndTime();
-		Buyin(msg.sender, accepted, refund, price, bonus);
+		Deposited(msg.sender, accounted, msg.value, price);
+	}
 
-		// send to treasury
-		require (treasury.send(accepted - bonus));
-		// issue refund
-		require (msg.sender.send(refund));
+	/// Return any funds previously deposited.
+	function returnDeposit()
+		when_ended
+	{
+		var accounted = deposits[msg.sender].accounted;
+		var received = deposits[msg.sender].received;
+		delete deposits[msg.sender];
+
+		totalAccounted -= accounted;
+		totalReceived -= received;
+
+		require (msg.sender.send(received));
+
+		DepositReturned(msg.sender, received);
+	}
+
+	/// Transfer deposit into tokens.
+	function executeDeposit(address _who)
+		when_launch_imminent
+	{
+		var accounted = deposits[_who].accounted;
+		var received = deposits[_who].received;
+		delete deposits[_who];
+
+		buyins[_who].accounted += accounted;
+		buyins[_who].received += received;
+
+		require (treasury.send(received));
+
+		DepositUsed(_who, accounted, received);
 	}
 
 	/// Like buyin except no payment required.
@@ -99,44 +237,43 @@ contract SecondPriceAuction {
 	{
 		flushEra();
 
-		uint accepted;
-		uint refund;
+		uint accounted;
+		bool refund;
 		uint price;
-		uint bonus;
-		(accepted, refund, price, bonus) = theDeal(_value);
+		(accounted, refund, price) = theDeal(_value, false);
 
-		/// No refunds allowed when pre-paid.
-		require (refund == 0);
+		/// No refunds allowed.
+		require (!refund);
 
-		participants[_who].value += uint128(accepted);
-		participants[_who].bonus += uint128(bonus);
-		totalAccounted += accepted;
-		totalReceived += accepted - bonus;
+		buyins[_who].accounted += uint128(accounted);
+		buyins[_who].received += uint128(_value);
+		totalAccounted += accounted;
+		totalReceived += _value;
 		endTime = calculateEndTime();
-		PrepayBuyin(_who, accepted, price, bonus);
+		PrepayBuyin(_who, accounted, _value, price);
 	}
 
 	/// Like buyin except no payment required and bonus automatically given.
-	function inject(address _who, uint128 _spent)
+	function inject(address _who, uint128 _received)
 	    only_admin
 	    only_basic(_who)
 	{
-		uint128 bonus = _spent * uint128(BONUS_SIZE) / 100;
-		uint128 value = _spent + bonus;
+		uint128 bonus = _received * uint128(BONUS_SIZE) / 100;
+		uint128 accounted = _received + bonus;
 
-		participants[_who].value += value;
-		participants[_who].bonus += bonus;
-		totalAccounted += value;
-		totalReceived += _spent;
+		buyins[_who].accounted += accounted;
+		buyins[_who].received += _received;
+		totalAccounted += accounted;
+		totalReceived += _received;
 		endTime = calculateEndTime();
-		Injected(_who, value, bonus);
+		Injected(_who, accounted, _received);
 	}
 
 	/// Mint tokens for a particular participant.
 	function finalise(address _who)
 		when_not_halted
 		when_ended
-		only_participants(_who)
+		only_buyins(_who)
 	{
 		// end the auction if we're the first one to finalise.
 		if (endPrice == 0) {
@@ -145,10 +282,10 @@ contract SecondPriceAuction {
 		}
 
 		// enact the purchase.
-		uint total = participants[_who].value;
+		uint total = buyins[_who].accounted;
 		uint tokens = total / endPrice;
 		totalFinalised += total;
-		delete participants[_who];
+		delete buyins[_who];
 		require (tokenContract.transfer(_who, tokens));
 
 		Finalised(_who, tokens);
@@ -174,8 +311,9 @@ contract SecondPriceAuction {
 	/// Emergency function to drain the contract of any funds.
 	function drain() only_admin { require (treasury.send(this.balance)); }
 
-	/// Kill this contract once the sale is finished.
-	function kill() when_all_finalised { suicide(admin); }
+	/// Set whether the launch is imminent or not.
+	function setLaunchImminent(bool _imminent) only_admin { launchImminent = _imminent; }
+
 
 	// Inspection:
 
@@ -208,30 +346,24 @@ contract SecondPriceAuction {
 
 	/// Get the number of `tokens` that would be given if the sender were to
 	/// spend `_value` now. Also tell you what `refund` would be given, if any.
-	function theDeal(uint _value)
+	function theDeal(uint _value, bool _isDeposit)
 		constant
-		returns (uint accepted, uint refund, uint price, uint bonus)
+		returns (uint accounted, bool refund, uint price)
 	{
 		if (!isActive()) return;
-		bonus = this.bonus(_value);
-		price = currentPrice();
-		accepted = _value + bonus;
-		uint available = tokensAvailable();
-		uint tokens = accepted / price;
-		refund = 0;
 
-		// if we've asked for too many, we should send back the extra.
-		if (tokens > available) {
-			// only accept enough of it to make sense.
-			accepted = available * price;
-			if (_value > accepted) {
-				// bonus doesn't count in the refund.
-				refund = _value - accepted;
-			}
-		}
+		uint bonus = this.bonus(_value);
+		uint hit = _isDeposit ? _value * (100 - DEPOSIT_HIT) / 100 : 0;
+
+		price = currentPrice();
+		accounted = _value + bonus - hit;
+
+		uint available = tokensAvailable();
+		uint tokens = accounted / price;
+		refund = (tokens > available);
 	}
 
-	/// Any applicable bonus to `_value` and returns it.
+	/// Any applicable bonus to `_value`.
 	function bonus(uint _value)
 		constant
 		returns (uint extra)
@@ -246,7 +378,7 @@ contract SecondPriceAuction {
 	/// True if the sale is ongoing.
 	function isActive() constant returns (bool) { return now >= beginTime && now < endTime; }
 
-	/// True if all participants have finalised.
+	/// True if all buyins have finalised.
 	function allFinalised() constant returns (bool) { return now >= endTime && totalAccounted == totalFinalised; }
 
 	/// Returns true if the sender of this transaction is a basic account.
@@ -269,14 +401,17 @@ contract SecondPriceAuction {
 	/// Ensure we're not halted.
 	modifier when_not_halted { require (!halted); _; }
 
-	/// Ensure all participants have finalised.
+	/// Ensure all buyins have finalised.
 	modifier when_all_finalised { require (allFinalised()); _; }
+
+	/// Ensure all buyins have finalised.
+	modifier when_launch_imminent { require (launchImminent); _; }
 
 	/// Ensure the sender sent a sensible amount of ether.
 	modifier avoid_dust { require (msg.value >= DUST_LIMIT); _; }
 
 	/// Ensure `_who` is a participant.
-	modifier only_participants(address _who) { require (participants[_who].value != 0); _; }
+	modifier only_buyins(address _who) { require (buyins[_who].accounted != 0); _; }
 
 	/// Ensure sender is admin.
 	modifier only_admin { require (msg.sender == admin); _; }
@@ -287,24 +422,34 @@ contract SecondPriceAuction {
 	/// Ensure sender is not a contract.
 	modifier only_basic(address who) { require (isBasicAccount(who)); _; }
 
-    /// Ensure sender has signed the contract.
+    /// Ensure sender is a KYCed non-US citizen.
+	modifier only_certified_non_us(address who) {
+		require (certifier.certified(who));
+		var cc = certifier.getCountryCode(who);
+		require (cc != bytes2("us") && cc != bytes2("uk") && cc != bytes2("jp"));
+		_;
+	}
+
+    /// Ensure sender is KYCed.
 	modifier only_certified(address who) {
-		require (certifier.certified(who) || (
-			tx.gasprice <= 1000000000 &&
-			msg.value <= 100 finney
-		));
+		require (certifier.certified(who));
+		var cc = certifier.getCountryCode(who);
+		require (cc != bytes2("jp"));
 		_;
 	}
 
 	// State:
 
-	struct Participant {
-		uint128 value;
-		uint128 bonus;
+	struct Account {
+		uint128 accounted;	// including bonus & hit
+		uint128 received;	// just the amount received, without bonus & hit
 	}
 
-	/// The auction participants.
-	mapping (address => Participant) public participants;
+	/// Those who have bought in to the auction.
+	mapping (address => Account) public buyins;
+
+	/// Those who have placed ether on deposit for the auction.
+	mapping (address => Account) public deposits;
 
 	/// Total amount of ether received, excluding phantom "bonus" ether.
 	uint public totalReceived = 0;
@@ -325,13 +470,16 @@ contract SecondPriceAuction {
 	/// Must be false for any public function to be called.
 	bool public halted;
 
+	/// True if the launch is imminent and deposits can be transferred into tokens.
+	bool public launchImminent;
+
 	// Constants after constructor:
 
 	/// The tokens contract.
 	Token public tokenContract;
 
 	/// The certifier.
-	Certifier public certifier = Certifier(0xeAcDEd0D0D6a6145d03Cd96A19A165D56FA122DF);
+	CCCertifier public certifier = CCCertifier(0xaEBd300d5Bc5f357cF35715C0169985484A70184);
 
 	/// The treasury address; where all the Ether goes.
 	address public treasury;
@@ -374,6 +522,9 @@ contract SecondPriceAuction {
 
 	/// Duration after sale begins that bonus is active.
 	uint constant public BONUS_DURATION = 1 hours;
+
+	/// Percentage of the spend that is deducted from a deposit.
+	uint constant public DEPOSIT_HIT = 45;
 
 	/// Number of Wei in one USD, constant.
 	uint constant public USDWEI = 1 ether / 200;

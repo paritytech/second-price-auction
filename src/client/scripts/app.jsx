@@ -1,12 +1,13 @@
 import moment from 'moment';
+import countries from 'i18n-iso-countries';
 import React from 'react';
 import BigNumber from 'bignumber.js';
 import {Button, Checkbox} from 'semantic-ui-react';
 import {Bond, TransformBond, ReactivePromise} from 'oo7';
-import {capitalizeFirstLetter, removeSigningPrefix, singleton, formatBlockNumber, bonds} from 'oo7-parity';
+import {hexToAscii, capitalizeFirstLetter, removeSigningPrefix, singleton, formatBlockNumber, bonds} from 'oo7-parity';
 import {Rdiv, Rspan, ReactiveComponent} from 'oo7-react';
 import {AccountIcon, BalanceBond, TransactButton, SigningProgressLabel, InlineBalance} from 'parity-reactive-ui';
-import {DutchAuctionABI} from './abis.jsx';
+import {DutchAuctionABI, CCCertifierABI} from './abis.jsx';
 
 const tokenDivisor = 1000;
 const tokenTLA = 'WLS';
@@ -141,7 +142,8 @@ class Eras extends ReactiveComponent {
 //var DutchAuction = singleton(() => bonds.makeContract('0x856EDD7F20d39f6Ef560a7B118a007A9Bc5CAbfD', DutchAuctionABI));
 //var DutchAuction = singleton(() => bonds.makeContract('0xC695F252Cb68021E99E020ebd3e817a82ADEe17F', DutchAuctionABI));
 //var DutchAuction = singleton(() => bonds.makeContract('0xe643110fBa0b7a72BA454B0AE98c5Cb6345fe34A', DutchAuctionABI));
-var DutchAuction = singleton(() => bonds.makeContract('0x778E173cA5822777Aa7c37c83ee598ef38D774A3', DutchAuctionABI));
+var DutchAuction = singleton(() => bonds.makeContract('0xb1b2F7cCE9F50e3Dea180Ce776495Ab0AAFFaB01', DutchAuctionABI));
+var CCCertifier = singleton(() => bonds.makeContract(DutchAuction().certifier(), CCCertifierABI));
 
 class ContributionPanel extends ReactiveComponent {
 	constructor() {
@@ -149,30 +151,45 @@ class ContributionPanel extends ReactiveComponent {
 			minPurchase: DutchAuction().currentPrice(),
 			maxPurchase: DutchAuction().maxPurchase()
 		});
+		this.state = {deposit: false};
         let d = '10 ether';
         this.spend = new Bond;
-		this.theDeal = DutchAuction().theDeal(this.spend);
+	}
+	deposit () {
+		return this.props.depositOnly || this.state.deposit;
 	}
 	render () {
+		var theDeal = DutchAuction().theDeal(this.spend, this.deposit());
 		return (<div id='contributionPanel'>
 			<BalanceBond
 				hintText="How much to spend?"
                 bond={this.spend}
 				disabled={!this.state.signature}
 			/>
+			<div style={{marginBottom: '1em'}}>
+			<Button.Group size='large'>
+			<Button disabled={!this.state.signature || this.props.depositOnly} active={!this.deposit()} onClick={() => this.setState({deposit: false})}>Spend</Button>
+			<Button.Or />
+			<Button disabled={!this.state.signature} active={this.deposit()} onClick={() => this.setState({deposit: true})}>Deposit</Button>
+			</Button.Group>
+			</div>
 			<p style={{textAlign: 'center', margin: '1em 2em'}}>
-				By spending <InlineBalance value={this.spend}/>, you will receive <Rspan>{this.theDeal.map(([accepted, refund, price, bonus]) =>
-					<b>at least <TokenBalance value={accepted / price}/></b>
+				<Rspan>{theDeal.map(([_, r]) => r
+					? <span>
+						<InlineBalance value={this.spend}/> is greater than the maximum spend.
+					</span>
+					: <span>
+						By {this.deposit() ? 'depositing' : 'spending'} <InlineBalance value={this.spend}/>, you will receive <Rspan>{theDeal.map(([accepted, refund, price]) =>
+							<b>at least <TokenBalance value={accepted / price}/></b>
+						)}</Rspan> when the network launches
+						{this.deposit() ? ', and be entitled to a 100% refund at any time before' : ''}
+					</span>
 				)}</Rspan>
-				<Rspan>{this.theDeal.map(([_, r]) => r > 0
-					? <span>and get <InlineBalance value={r}/> refunded</span>
-					: '')
-				}</Rspan>.
 			</p>
 			<TransactButton
 				content={`Purchase ${tokenTLA}s`}
-				tx={()=>this.props.onContribute(this.spend, this.state.signature)}
-				disabled={this.spend.map(s => !this.state.signature || !s || +s < +this.state.minPurchase || (this.state.request && !this.state.request.failed && !this.state.request.confirmed))}
+				tx={()=>this.props.onContribute(this.spend, this.state.signature, this.deposit())}
+				disabled={this.spend.map(s => !this.state.signature || !s || +s < +this.state.minPurchase || +s > +this.state.maxPurchase || (this.state.request && !this.state.request.failed && !this.state.request.confirmed))}
 			/>
 		</div>);
 	}
@@ -211,7 +228,10 @@ let contributionStatus = singleton(() => new TransformBond((h, b, e, c) =>
 
 class Manager extends ReactiveComponent {
 	constructor() {
-		super([], { status: contributionStatus() });
+		super([], {
+			status: contributionStatus(),
+			kyc: CCCertifier().getCountryCode(bonds.me)
+		});
 		this.state = { signing: null, contribution: null };
 	}
 	handleSign () {
@@ -222,17 +242,26 @@ class Manager extends ReactiveComponent {
 			that.setState({signing});
 		});
 	}
-	handleContribute (value, signature) {
-		let t = DutchAuction().buyin(...signature, { value });
+	handleContribute (value, signature, deposit) {
+		let t = DutchAuction()[deposit ? 'deposit' : 'buyin'](...signature, { value });
 		this.setState({
 			contribution: t
 		});
 		return t;
 	}
 	render () {
+
         return (this.state.status && this.state.status.active)
-          ? (
-			<div>
+          ? this.state.kyc === ''
+		  ? (<h2 style={{textAlign: 'center', margin: '10em'}}>This account is not registered to any identity. Please ensure you have associated the account with a valid document through any of the identity providers.</h2>)
+		  : this.state.kyc === 'jp'
+		  ? (<h2 style={{textAlign: 'center', margin: '10em'}}>This account belongs to a Japanese citizen. Unfortunately, Japanese are not elegable to join this crowdsale due to requirements placed on token sales by the Japanese authorities.</h2>)
+		  : (<div>
+			  {
+				  this.state.kyc === 'uk' || this.state.kyc == 'us'
+				  ? (<h2 style={{textAlign: 'center', margin: '2em'}}>This account is KYCed to a US/UK citizen. Fully-refundable deposits are allowed, but outright spending is prohibited due to unclear regulations concerning the sale of illiquid tokens.</h2>)
+				  : (<h2 style={{textAlign: 'center', margin: '2em'}}>This account is fully KYCed as an OFAC-clean citizen of {countries.getName(this.state.kyc, "en")}.</h2>)
+			  }
 			  <section id='terms'>
 				<h1>Terms and Conditions</h1>
 				<p>TODO: Put some terms and conditions here</p>
@@ -244,6 +273,7 @@ class Manager extends ReactiveComponent {
 			  <section id='action'>
 				<h1>Send Funds</h1>
 				<ContributionPanel
+				  depositOnly={this.state.kyc === 'uk' || this.state.kyc === 'us'}
 				  signature={this.state.signing ? this.state.signing.map(s => (s && s.signed || null)) : null}
 	              request={this.state.contribution}
 	              onContribute={this.handleContribute.bind(this)}
@@ -352,7 +382,8 @@ class AuctionSummary extends ReactiveComponent {
 export class App extends ReactiveComponent {
 	constructor() {
 		super([], {
-			purchased: bonds.accounts.mapEach(a => DutchAuction().participants(a)).map(bs => bs.reduce((x, a) => [x[0].add(a[0]), x[1].add(a[1])])),
+			purchased: bonds.accounts.mapEach(a => DutchAuction().buyins(a)).map(bs => bs.reduce((x, a) => [x[0].add(a[0]), x[1].add(a[1])])),
+			deposited: bonds.accounts.mapEach(a => DutchAuction().deposits(a)).map(bs => bs.reduce((x, a) => [x[0].add(a[0]), x[1].add(a[1])])),
 			isActive: DutchAuction().isActive(),
 			allFinalised: DutchAuction().allFinalised(),
 			totalAccounted: DutchAuction().totalAccounted()
@@ -387,9 +418,11 @@ export class App extends ReactiveComponent {
 		window.bonds = bonds;
 		window.DutchAuction = DutchAuction;
 		window.DutchAuctionABI = DutchAuctionABI;
+		window.CCCertifier = CCCertifier;
 	}
 	render () {
 		let purchased = this.state.purchased;
+		let deposited = this.state.deposited;
 		return purchased == null ? <div/> : (<div className='site'>
 			<header>
 			  <nav className='nav-header'>
@@ -419,17 +452,19 @@ export class App extends ReactiveComponent {
 				</div>
 			  </section>
 			  {
-				+purchased == 0 ? null : (<section className='state-main'>
+				+purchased[1] == 0 && +deposited[1] == 0 ? null : (<section className='state-main'>
 					<div className='container'>
 					  You spent <InlineBalance
-					  	value={purchased[0].sub(purchased[1])}
+					  	value={purchased[1]}
+					  /> and deposited <InlineBalance
+					  	value={deposited[1]}
 					  /> to buy {this.state.isActive ? (
 						<span>at least <TokenBalance value={
-						  DutchAuction().currentPrice().map(_ => purchased[0].div(_))
+						  DutchAuction().currentPrice().map(_ => purchased[0].add(deposited[0]).div(_))
 					    }/></span>
 					  ) : (
 					    <span>exactly <TokenBalance value={
-					      DutchAuction().tokenCap().map(r => purchased[0].mul(r).div(this.state.totalAccounted))
+					      DutchAuction().tokenCap().map(r => purchased[0].add(deposited[0]).mul(r).div(this.state.totalAccounted))
 						}/></span>
 					  )}
 					</div>

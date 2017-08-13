@@ -41,16 +41,18 @@ contract MultiCertifier is Owned, Certifier {
 
 	struct Certification {
 		address certifier;
+		bytes2 countryCode;
 		bool active;
 	}
 
-	function certify(address _who)
+	function certify(address _who, bytes2 _countryCode)
 		only_delegate
 		only_uncertified(_who)
 	{
 		certs[_who].active = true;
 		certs[_who].certifier = msg.sender;
-		Confirmed(_who, msg.sender);
+		certs[_who].countryCode = _countryCode;
+		Confirmed(_who, msg.sender, _countryCode);
 	}
 
 	function revoke(address _who)
@@ -63,6 +65,7 @@ contract MultiCertifier is Owned, Certifier {
 
 	function certified(address _who) constant returns (bool) { return certs[_who].active; }
 	function getCertifier(address _who) constant returns (address) { return certs[_who].certifier; }
+	function getCountryCode(address _who) constant returns (bytes2) { return certs[_who].countryCode; }
 	function addDelegate(address _new) only_owner { delegates[_new] = true; }
 	function removeDelegate(address _old) only_owner { delete delegates[_old]; }
 
