@@ -426,7 +426,7 @@ contract SecondPriceAuction {
 	modifier only_certified_non_us(address who) {
 		require (certifier.certified(who));
 		var cc = certifier.getCountryCode(who);
-		require (cc != bytes2("us") && cc != bytes2("uk") && cc != bytes2("jp"));
+		require (cc != bytes2("us") && cc != bytes2("gb") && cc != bytes2("jp"));
 		_;
 	}
 

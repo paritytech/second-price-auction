@@ -2,7 +2,7 @@ import moment from 'moment';
 import countries from 'i18n-iso-countries';
 import React from 'react';
 import BigNumber from 'bignumber.js';
-import {Button, Checkbox} from 'semantic-ui-react';
+import {Button, Checkbox, Label, Flag, Message} from 'semantic-ui-react';
 import {Bond, TransformBond, ReactivePromise} from 'oo7';
 import {hexToAscii, capitalizeFirstLetter, removeSigningPrefix, singleton, formatBlockNumber, bonds} from 'oo7-parity';
 import {Rdiv, Rspan, ReactiveComponent} from 'oo7-react';
@@ -228,15 +228,13 @@ let contributionStatus = singleton(() => new TransformBond((h, b, e, c) =>
 
 const states = {
 	us: false,
-	uk: false
+	gb: false,
+	jp: null
 };
 
 class Manager extends ReactiveComponent {
 	constructor() {
-		super([], {
-			status: contributionStatus(),
-			kyc: CCCertifier().getCountryCode(bonds.me)
-		});
+		super();
 		this.state = { signing: null, contribution: null };
 	}
 	handleSign () {
@@ -255,18 +253,8 @@ class Manager extends ReactiveComponent {
 		return t;
 	}
 	render () {
-        return (this.state.status && this.state.status.active)
-          ? this.state.kyc === ''
-		  ? (<h2 style={{textAlign: 'center', margin: '10em'}}>This account is not registered to any identity. Please ensure you have associated the account with a valid document through any of the identity providers.</h2>)
-		  : this.state.kyc === 'jp'
-		  ? (<h2 style={{textAlign: 'center', margin: '10em'}}>Unfortunately, Japanese are not elegable to join this crowdsale due to requirements placed on token sales by the Japanese authorities.</h2>)
-		  : (<div><h2 style={{textAlign: 'center', margin: '2em'}}>This account belongs to an OFAC-clean citizen of {countries.getName(this.state.kyc, "en")}.</h2>
-			  {
-				  this.state.kyc === 'uk' || this.state.kyc === 'us'
-				  ? (<h2 style={{textAlign: 'center', margin: '2em'}}>Unfortunately, due to unclear regulations of your government concerning the pre-sale of illiquid tokens, fully-refundable deposits are allowed, but outright spending is prohibited.</h2>)
-				  : null
-			  }
-			  <section id='terms'>
+        return (<div>
+			<section id='terms'>
 				<h1>Terms and Conditions</h1>
 				<p>TODO: Put some terms and conditions here</p>
 				<TermsPanel
@@ -277,18 +265,57 @@ class Manager extends ReactiveComponent {
 			  <section id='action'>
 				<h1>Send Funds</h1>
 				<ContributionPanel
-				  depositOnly={states[this.state.kyc] === false}
+				  depositOnly={this.props.depositOnly}
 				  signature={this.state.signing ? this.state.signing.map(s => (s && s.signed || null)) : null}
 	              request={this.state.contribution}
 	              onContribute={this.handleContribute.bind(this)}
 	            />
 			  </section>
 			</div>
-		  )
-		  : (<h2 style={{textAlign: 'center', margin: '10em'}}>Contribution period not active</h2>);
+		);
 	}
 }
 
+class Bouncer extends ReactiveComponent {
+	constructor() {
+		super([], {
+			status: contributionStatus(),
+			kyc: CCCertifier().getCountryCode(bonds.me),
+			hit: DutchAuction().DEPOSIT_HIT()
+		});
+	}
+
+	render () {
+        return this.state.kyc === ''
+		  ? (<h2 style={{textAlign: 'center', margin: '10em'}}>This account is not registered to any identity. Please ensure you have associated the account with a valid document through any of the identity providers.</h2>)
+		  : (<div style={{paddingTop: '3em'}}>
+			  {
+		 	    states[this.state.kyc] === null
+				? <Message error>
+				  <Message.Header><Flag name={this.state.kyc}/>No participation allowed from {countries.getName(this.state.kyc, "en")}!</Message.Header>
+		  		  <p>Unfortunately, due to adverse regulations of your government, we are unable to allow you any kind of access into this token pre-sale. We hope this will change in the near future.</p>
+				</Message>
+				: (<div>{
+					states[this.state.kyc] === false
+					? <Message warning>
+					  <Message.Header><Flag name={this.state.kyc}/>Reduced participation allowed from {countries.getName(this.state.kyc, "en")}!</Message.Header>
+					  <p>Unfortunately, due to unclear regulations of your government, we are unable to allow you to pre-purchase tokens. You may instead make an entirely refundable deposit which may be converted to tokens once they are ready for sale. Since you have the option to gain a full refund at any time before the launch, the price paid in this way will be higher than the standard presale price: you will receive {+this.state.hit}% fewer tokens for the same funds.</p>
+					</Message>
+	  		  		: <Message info>
+					  <Message.Header><Flag name={this.state.kyc}/>Full participation allowed from {countries.getName(this.state.kyc, "en")}!</Message.Header>
+					  <p>You have two options for your contribution. You may either buy-in to the pre-sale now in which case you will receive your {tokenTLA} tokens on the network launch, or alternatively, you may instead make an entirely refundable deposit which is converted to tokens once the network is ready for launch. In this case, since you have the option to gain a refund at any time before the launch, the final price paid is higher than the standard presale price: you would receive {+this.state.hit}% fewer tokens for the same funds.</p>
+					</Message>}
+					{(this.state.status && this.state.status.active)
+			          ? <Manager depositOnly={states[this.state.kyc] === false} />
+					  : (<h2 style={{textAlign: 'center', margin: '10em'}}>
+					  	Contribution period not active
+					  </h2>)
+				    }
+				</div>)
+			  }
+			</div>);
+	}
+}
 class Subtitling extends ReactiveComponent {
 	constructor () {
 		super([], { isActive: DutchAuction().isActive(), allFinalised: DutchAuction().allFinalised(), totalReceived: DutchAuction().totalReceived() });
@@ -412,10 +439,10 @@ export class App extends ReactiveComponent {
 			if (ticks.length > 0) {
 				let last = Math.max(era, ticks[ticks.length - 1].era);
 				for (let i = 0, j = 0; i < last; ++i) {
-					if (j >= ticks.length) {
+					if (i === ticks[ticks.length - 1].era + 1) {
 						erasAccounted.push(+accountedNow);
 					}
-					else if (ticks[j].era > i) {
+					else if (j >= ticks.length || ticks[j].era > i) {
 						erasAccounted.push(erasAccounted.length > 0 ? erasAccounted[erasAccounted.length - 1] : 0);
 					} else {
 						erasAccounted.push(+ticks[j].accounted);
@@ -444,7 +471,7 @@ export class App extends ReactiveComponent {
 			  <nav className='nav-header'>
 				<div className='container'>
 				  <span id='logo'>
-					<AccountIcon address={DutchAuction().address} id='logoIcon' style={{width: '3em', marginTop: '0.5em', boxShadow: '0px 2px 30px 0px #000'}}/>
+					<AccountIcon address={DutchAuction().address} id='logoIcon' style={{width: '3em', marginTop: '0.5em', boxShadow: '0px 2px 30px 0px rgba(0, 0, 0, 0.5)'}}/>
 					<span style={{marginLeft: '1em'}}>WHITELABEL</span>
 				  </span>
 				</div>
@@ -491,7 +518,7 @@ export class App extends ReactiveComponent {
 			  <section className='contrib-main'>
 				<div className='container'>
 				  <div className='row'>
-					<Manager />
+					<Bouncer />
 				  </div>
 				</div>
 			  </section>
