@@ -433,12 +433,13 @@ export class App extends ReactiveComponent {
 				bonds.time
 			], (p, b, n) => Math.ceil((n / 1000 - b) / p))
 		], (eraPeriod, tokenCap, usdWei, ticks, accountedNow, era) => {
-			console.log('mapped', +eraPeriod, +usdWei, ticks, era);
+			console.log('mapped', +eraPeriod, +usdWei, ticks, +ticks[ticks.length - 1].era, era);
 			let erasAccounted = [];
 			let erasCap = [];
 			if (ticks.length > 0) {
-				let last = Math.max(era, ticks[ticks.length - 1].era);
-				for (let i = 0, j = 0; i < last; ++i) {
+
+				let last = Math.max(era, ticks[ticks.length - 1].era + 1);
+				for (let i = 0, j = 0; i <= last; ++i) {
 					if (i === ticks[ticks.length - 1].era + 1) {
 						erasAccounted.push(+accountedNow);
 					}
