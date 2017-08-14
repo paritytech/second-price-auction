@@ -31,6 +31,9 @@ contract Certifier {
 }
 
 contract CCCertifier is Certifier {
+	event Confirmed(address indexed who, address indexed by, bytes2 indexed countryCode);
+	event Revoked(address indexed who, address indexed by);
+
 	function getCountryCode(address _who) constant returns (bytes2);
 }
 
@@ -44,9 +47,6 @@ contract MultiCertifier is Owned, CCCertifier {
 	modifier only_certifier_of(address who) { require (msg.sender == owner || msg.sender == certs[who].certifier); _; }
 	modifier only_certified(address who) { require (certs[who].active); _; }
 	modifier only_uncertified(address who) { require (!certs[who].active); _; }
-
-	event Confirmed(address indexed who, address indexed by, bytes2 indexed countryCode);
-	event Revoked(address indexed who, address indexed by);
 
 	struct Certification {
 		address certifier;
