@@ -18,7 +18,11 @@ class TokenBalance extends ReactiveComponent {
 	}
 	readyRender () {
 		let n = Math.round(+this.state.value) / tokenDivisor;
-		return (<span><b>{n}</b> <span style={{fontSize: '85%'}}>{tokenTLA}</span></span>);
+		n = ('' + n).replace(/(\d)(?=(\d{3})+(\.|$))/g, "$1,")
+		let m = n.match(/([^\.]*)(.*)$/);
+		let whole = m[1];
+		let decimals = m[2];
+		return (<span><b>{whole}<span style={{fontSize: '85%', opacity: 0.66}}>{decimals}</span></b> <span style={{fontSize: '85%'}}>{tokenTLA}</span></span>);
 	}
 }
 
@@ -256,7 +260,7 @@ class Manager extends ReactiveComponent {
         return (<div>
 			<section id='terms'>
 				<h1>Terms and Conditions</h1>
-				<p>TODO: Put some terms and conditions here</p>
+				<p><Rspan>{DutchAuction().STATEMENT().map(removeSigningPrefix)}</Rspan></p>
 				<TermsPanel
 				  request={this.state.signing}
 	  			  onRequest={this.handleSign.bind(this)}
@@ -349,10 +353,10 @@ class AuctionSummary extends ReactiveComponent {
 		return this.state.isActive ?
 			(<div>
 			  <div className={'field'}>
-				<div>{tokenTLA}s Left</div>
-				<Rdiv
+				<div>Remaining for sale</div>
+				<div
 					className='_fieldValue _basic'
-				>{DutchAuction().tokensAvailable().map(t => `${t / tokenDivisor}`)}</Rdiv>
+				><TokenBalance value={DutchAuction().tokensAvailable()}/></div>
 			  </div>
 			  <div className={'field'}>
 				<div>Current Price</div>
@@ -417,7 +421,8 @@ export class App extends ReactiveComponent {
 			deposited: bonds.accounts.mapEach(a => DutchAuction().deposits(a)).map(bs => bs.reduce((x, a) => [x[0].add(a[0]), x[1].add(a[1])])),
 			isActive: DutchAuction().isActive(),
 			allFinalised: DutchAuction().allFinalised(),
-			totalAccounted: DutchAuction().totalAccounted()
+			totalAccounted: DutchAuction().totalAccounted(),
+			bonus: DutchAuction().bonus(100),
 		});
 		let earliestBlock = DutchAuction().Ticked({limit: 1}).map(x => x.blockNumber - 2*7*24*60*4);
 		let ticks = DutchAuction().Ticked({limit: 50000, startBlock: earliestBlock});
@@ -427,21 +432,21 @@ export class App extends ReactiveComponent {
 			DutchAuction().USDWEI(),
 			ticks,
 			DutchAuction().totalAccounted(),
+			DutchAuction().eraIndex(),
 			Bond.mapAll([
 				DutchAuction().ERA_PERIOD(),
 				DutchAuction().beginTime(),
 				bonds.time
 			], (p, b, n) => Math.ceil((n / 1000 - b) / p))
-		], (eraPeriod, tokenCap, usdWei, ticks, accountedNow, era) => {
+		], (eraPeriod, tokenCap, usdWei, ticks, latestAccounted, latestEra, era) => {
 			console.log('mapped', +eraPeriod, +usdWei, ticks, +ticks[ticks.length - 1].era, era);
 			let erasAccounted = [];
 			let erasCap = [];
 			if (ticks.length > 0) {
-
-				let last = Math.max(era, ticks[ticks.length - 1].era + 1);
+				let last = Math.max(era, latestEra);
 				for (let i = 0, j = 0; i <= last; ++i) {
-					if (i === ticks[ticks.length - 1].era + 1) {
-						erasAccounted.push(+accountedNow);
+					if (i >= latestEra) {
+						erasAccounted.push(+latestAccounted);
 					}
 					else if (j >= ticks.length || ticks[j].era > i) {
 						erasAccounted.push(erasAccounted.length > 0 ? erasAccounted[erasAccounted.length - 1] : 0);
@@ -513,6 +518,21 @@ export class App extends ReactiveComponent {
 					      DutchAuction().tokenCap().map(r => purchased[0].add(deposited[0]).mul(r).div(this.state.totalAccounted))
 						}/></span>
 					  )}
+					</div>
+				</section>)
+			  }
+			  {
+				+this.state.bonus === 0 ? null : (<section className='bonus-main'>
+					<div className='container'>
+						<b>Bonus!</b> Purchases processed in the next <Rspan>{
+							Bond.mapAll([
+								DutchAuction().BONUS_DURATION(),
+								DutchAuction().beginTime(),
+								bonds.head.timestamp
+							], (d, b, n) => +b + +d - n / 1000)
+						}</Rspan> seconds receive an additional <b>
+							{+this.state.bonus}% {tokenTLA}
+						</b> tokens.
 					</div>
 				</section>)
 			  }
