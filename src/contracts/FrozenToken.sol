@@ -1,7 +1,8 @@
-//! By Parity Team (Ethcore), 2016.
+//! Frozen Token contract.
+//! Copyright Parity Technologies, 2017.
 //! Released under the Apache Licence 2.
 
-pragma solidity ^0.4.7;
+pragma solidity ^0.4.16;
 
 // https://github.com/ethereum/EIPs/issues/20
 contract ERC20 {

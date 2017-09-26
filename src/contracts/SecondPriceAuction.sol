@@ -1,7 +1,8 @@
+//! Modified second price auction.
 //! Copyright Parity Technologies, 2017.
 //! Released under the Apache Licence 2.
 
-pragma solidity ^0.4.13;
+pragma solidity ^0.4.16;
 
 /// Stripped down ERC20 standard token interface.
 contract Token {
