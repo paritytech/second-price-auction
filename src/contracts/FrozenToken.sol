@@ -21,7 +21,7 @@ contract Owned {
 	event NewOwner(address indexed old, address indexed current);
 
 	modifier only_owner {
-		if (msg.sender != owner) throw;
+		require (msg.sender == owner);
 		_;
 	}
 

@@ -30,58 +30,6 @@ contract Certifier {
 	function getUint(address, string) constant returns (uint) {}
 }
 
-contract CCCertifier is Certifier {
-	event Confirmed(address indexed who, address indexed by, bytes2 indexed countryCode);
-	event Revoked(address indexed who, address indexed by);
-
-	function getCountryCode(address _who) constant returns (bytes2);
-}
-
-/**
- * Contract to allow multiple parties to collaborate over a certification contract.
- * Each certified account is associated with the delegate who certified it.
- * Delegates can be added and removed only by the contract owner.
- */
-contract MultiCertifier is Owned, CCCertifier {
-	modifier only_delegate { require (msg.sender == owner || delegates[msg.sender]); _; }
-	modifier only_certifier_of(address who) { require (msg.sender == owner || msg.sender == certs[who].certifier); _; }
-	modifier only_certified(address who) { require (certs[who].active); _; }
-	modifier only_uncertified(address who) { require (!certs[who].active); _; }
-
-	struct Certification {
-		address certifier;
-		bytes2 countryCode;
-		bool active;
-	}
-
-	function certify(address _who, bytes2 _countryCode)
-		only_delegate
-		only_uncertified(_who)
-	{
-		certs[_who].active = true;
-		certs[_who].certifier = msg.sender;
-		certs[_who].countryCode = _countryCode;
-		Confirmed(_who, msg.sender, _countryCode);
-	}
-
-	function revoke(address _who)
-		only_certifier_of(_who)
-		only_certified(_who)
-	{
-		certs[_who].active = false;
-		Revoked(_who, msg.sender);
-	}
-
-	function certified(address _who) constant returns (bool) { return certs[_who].active; }
-	function getCertifier(address _who) constant returns (address) { return certs[_who].certifier; }
-	function getCountryCode(address _who) constant returns (bytes2) { return certs[_who].countryCode; }
-	function addDelegate(address _new) only_owner { delegates[_new] = true; }
-	function removeDelegate(address _old) only_owner { delete delegates[_old]; }
-
-	mapping (address => Certification) certs;
-	mapping (address => bool) delegates;
-}
-
 /// Simple Dutch Auction contract. Price starts high and monotonically decreases
 /// until all tokens are sold at the current price with currently received
 /// funds.
@@ -164,66 +112,6 @@ contract SecondPriceAuction {
 
 		// send to treasury
 		require (treasury.send(msg.value));
-	}
-
-	function deposit(uint8 v, bytes32 r, bytes32 s)
-		payable
-		when_not_halted
-		when_active
-		avoid_dust
-		only_signed(msg.sender, v, r, s)
-		only_basic(msg.sender)
-		only_certified(msg.sender)
-	{
-		flushEra();
-
-		uint accounted;
-		bool refund;
-		uint price;
-		(accounted, refund, price) = theDeal(msg.value, true);
-
-		/// No refunds allowed.
-		require (!refund);
-
-		// record the acceptance.
-		deposits[msg.sender].accounted += uint128(accounted);
-		deposits[msg.sender].received += uint128(msg.value);
-		totalAccounted += accounted;
-		totalReceived += msg.value;
-		endTime = calculateEndTime();
-		Deposited(msg.sender, accounted, msg.value, price);
-	}
-
-	/// Return any funds previously deposited.
-	function returnDeposit()
-		when_ended
-	{
-		var accounted = deposits[msg.sender].accounted;
-		var received = deposits[msg.sender].received;
-		delete deposits[msg.sender];
-
-		totalAccounted -= accounted;
-		totalReceived -= received;
-
-		require (msg.sender.send(received));
-
-		DepositReturned(msg.sender, received);
-	}
-
-	/// Transfer deposit into tokens.
-	function executeDeposit(address _who)
-		when_launch_imminent
-	{
-		var accounted = deposits[_who].accounted;
-		var received = deposits[_who].received;
-		delete deposits[_who];
-
-		buyins[_who].accounted += accounted;
-		buyins[_who].received += received;
-
-		require (treasury.send(received));
-
-		DepositUsed(_who, accounted, received);
 	}
 
 	/// Like buyin except no payment required.
@@ -310,10 +198,6 @@ contract SecondPriceAuction {
 
 	/// Emergency function to drain the contract of any funds.
 	function drain() only_admin { require (treasury.send(this.balance)); }
-
-	/// Set whether the launch is imminent or not.
-	function setLaunchImminent(bool _imminent) only_admin { launchImminent = _imminent; }
-
 
 	// Inspection:
 
@@ -404,9 +288,6 @@ contract SecondPriceAuction {
 	/// Ensure all buyins have finalised.
 	modifier when_all_finalised { require (allFinalised()); _; }
 
-	/// Ensure all buyins have finalised.
-	modifier when_launch_imminent { require (launchImminent); _; }
-
 	/// Ensure the sender sent a sensible amount of ether.
 	modifier avoid_dust { require (msg.value >= DUST_LIMIT); _; }
 
@@ -422,19 +303,9 @@ contract SecondPriceAuction {
 	/// Ensure sender is not a contract.
 	modifier only_basic(address who) { require (isBasicAccount(who)); _; }
 
-    /// Ensure sender is a KYCed non-US citizen.
-	modifier only_certified_non_us(address who) {
-		require (certifier.certified(who));
-		var cc = certifier.getCountryCode(who);
-		require (cc != bytes2("us") && cc != bytes2("gb") && cc != bytes2("jp"));
-		_;
-	}
-
     /// Ensure sender is KYCed.
 	modifier only_certified(address who) {
 		require (certifier.certified(who));
-		var cc = certifier.getCountryCode(who);
-		require (cc != bytes2("jp"));
 		_;
 	}
 
@@ -448,13 +319,10 @@ contract SecondPriceAuction {
 	/// Those who have bought in to the auction.
 	mapping (address => Account) public buyins;
 
-	/// Those who have placed ether on deposit for the auction.
-	mapping (address => Account) public deposits;
-
 	/// Total amount of ether received, excluding phantom "bonus" ether.
 	uint public totalReceived = 0;
 
-	/// Total amount of ether received, including phantom "bonus" ether.
+	/// Total amount of ether accounted for, including phantom "bonus" ether.
 	uint public totalAccounted = 0;
 
 	/// Total amount of ether which has been finalised.
@@ -470,16 +338,13 @@ contract SecondPriceAuction {
 	/// Must be false for any public function to be called.
 	bool public halted;
 
-	/// True if the launch is imminent and deposits can be transferred into tokens.
-	bool public launchImminent;
-
 	// Constants after constructor:
 
 	/// The tokens contract.
 	Token public tokenContract;
 
 	/// The certifier.
-	CCCertifier public certifier = CCCertifier(0xaEBd300d5Bc5f357cF35715C0169985484A70184);
+	Certifier public certifier = Certifier(0xaEBd300d5Bc5f357cF35715C0169985484A70184);
 
 	/// The treasury address; where all the Ether goes.
 	address public treasury;
@@ -523,11 +388,8 @@ contract SecondPriceAuction {
 	/// Duration after sale begins that bonus is active.
 	uint constant public BONUS_DURATION = 1 hours;
 
-	/// Percentage of the spend that is deducted from a deposit.
-	uint constant public DEPOSIT_HIT = 45;
-
 	/// Number of Wei in one USD, constant.
-	uint constant public USDWEI = 1 ether / 200;
+	uint constant public USDWEI = 1 ether / 250;
 
 	/// Divisor of the token.
 	uint constant public DIVISOR = 1000;

@@ -6,7 +6,7 @@ pragma solidity ^0.4.15;
 
 // From Owned.sol
 contract Owned {
-	modifier only_owner { if (msg.sender != owner) return; _; }
+	modifier only_owner { require (msg.sender == owner) return; _; }
 
 	event NewOwner(address indexed old, address indexed current);
 
@@ -25,19 +25,12 @@ contract Certifier {
 	function getUint(address, string) constant returns (uint) {}
 }
 
-contract CCCertifier is Certifier {
-	event Confirmed(address indexed who, address indexed by, bytes2 indexed countryCode);
-	event Revoked(address indexed who, address indexed by);
-
-	function getCountryCode(address _who) constant returns (bytes2);
-}
-
 /**
  * Contract to allow multiple parties to collaborate over a certification contract.
  * Each certified account is associated with the delegate who certified it.
  * Delegates can be added and removed only by the contract owner.
  */
-contract MultiCertifier is Owned, CCCertifier {
+contract MultiCertifier is Owned, Certifier {
 	modifier only_delegate { require (msg.sender == owner || delegates[msg.sender]); _; }
 	modifier only_certifier_of(address who) { require (msg.sender == owner || msg.sender == certs[who].certifier); _; }
 	modifier only_certified(address who) { require (certs[who].active); _; }
@@ -45,18 +38,16 @@ contract MultiCertifier is Owned, CCCertifier {
 
 	struct Certification {
 		address certifier;
-		bytes2 countryCode;
 		bool active;
 	}
 
-	function certify(address _who, bytes2 _countryCode)
+	function certify(address _who)
 		only_delegate
 		only_uncertified(_who)
 	{
 		certs[_who].active = true;
 		certs[_who].certifier = msg.sender;
-		certs[_who].countryCode = _countryCode;
-		Confirmed(_who, msg.sender, _countryCode);
+		Confirmed(_who, msg.sender);
 	}
 
 	function revoke(address _who)
@@ -69,7 +60,6 @@ contract MultiCertifier is Owned, CCCertifier {
 
 	function certified(address _who) constant returns (bool) { return certs[_who].active; }
 	function getCertifier(address _who) constant returns (address) { return certs[_who].certifier; }
-	function getCountryCode(address _who) constant returns (bytes2) { return certs[_who].countryCode; }
 	function addDelegate(address _new) only_owner { delegates[_new] = true; }
 	function removeDelegate(address _old) only_owner { delete delegates[_old]; }
 
