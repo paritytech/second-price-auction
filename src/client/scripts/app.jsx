@@ -146,7 +146,7 @@ class Eras extends ReactiveComponent {
 //var DutchAuction = singleton(() => bonds.makeContract('0x856EDD7F20d39f6Ef560a7B118a007A9Bc5CAbfD', DutchAuctionABI));
 //var DutchAuction = singleton(() => bonds.makeContract('0xC695F252Cb68021E99E020ebd3e817a82ADEe17F', DutchAuctionABI));
 //var DutchAuction = singleton(() => bonds.makeContract('0xe643110fBa0b7a72BA454B0AE98c5Cb6345fe34A', DutchAuctionABI));
-var DutchAuction = singleton(() => bonds.makeContract('0xf21dCAb8677b6cd34880cF0d0B3e4Da494c4C144', DutchAuctionABI));
+var DutchAuction = singleton(() => bonds.makeContract('0xF6E898897E60cE9839Ec445aA71B05F90e499FB7', DutchAuctionABI));
 var Certifier = singleton(() => bonds.makeContract(DutchAuction().certifier(), CertifierABI));
 
 class ContributionPanel extends ReactiveComponent {
@@ -235,7 +235,7 @@ class Manager extends ReactiveComponent {
 		});
 	}
 	handleContribute (value, signature) {
-		let t = DutchAuction()['buyin'](...signature, { value, gasPrice: 5000000000 });	// TODO: use DutchAuction().MAX_GAS_PRICE()
+		let t = DutchAuction()['buyin'](...signature, { value, gasPrice: DutchAuction().MAX_GAS_PRICE() });
 		this.setState({
 			contribution: t
 		});
