@@ -2,7 +2,7 @@
 //! By Parity Technologies, 2017.
 //! Released under the Apache Licence 2.
 
-pragma solidity ^0.4.15;
+pragma solidity ^0.4.16;
 
 // From Owned.sol
 contract Owned {
@@ -35,6 +35,9 @@ contract MultiCertifier is Owned, Certifier {
 	modifier only_certifier_of(address who) { require (msg.sender == owner || msg.sender == certs[who].certifier); _; }
 	modifier only_certified(address who) { require (certs[who].active); _; }
 	modifier only_uncertified(address who) { require (!certs[who].active); _; }
+
+	event Confirmed(address indexed who, address indexed by);
+	event Revoked(address indexed who, address indexed by);
 
 	struct Certification {
 		address certifier;
