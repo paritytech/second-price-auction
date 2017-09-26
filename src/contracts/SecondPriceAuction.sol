@@ -270,7 +270,7 @@ contract SecondPriceAuction {
 			ecrecover(STATEMENT_HASH, v, r, s) == who &&
 			certifier.certified(who) &&
 			isBasicAccount(who) &&
-			tx.gasprice <= 5000000000 &&
+			tx.gasprice <= MAX_GAS_PRICE &&
 			msg.value >= DUST_LIMIT
 		);
 		_;
@@ -340,6 +340,9 @@ contract SecondPriceAuction {
 
 	/// Anything less than this is considered dust and cannot be used to buy in.
 	uint constant public DUST_LIMIT = 5 finney;
+
+	/// The maximum gas price that may be provided for buyin transactions.
+	uint constant public MAX_GAS_PRICE = 5000000000;
 
 	/// The hash of the statement which must be signed in order to buyin.
 	bytes32 constant public STATEMENT_HASH = keccak256(STATEMENT);
