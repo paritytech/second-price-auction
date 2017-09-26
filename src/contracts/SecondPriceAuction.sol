@@ -8,10 +8,9 @@ contract Token {
 	function transfer(address _to, uint256 _value) returns (bool success);
 }
 
-
 // From Owned.sol
 contract Owned {
-	modifier only_owner { if (msg.sender != owner) return; _; }
+	modifier only_owner { require (msg.sender == owner); _; }
 
 	event NewOwner(address indexed old, address indexed current);
 
