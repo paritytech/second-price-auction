@@ -35,35 +35,6 @@ contract FrozenToken is Owned, Token {
 		bool liquid;
 	}
 
-	// the balance should be available
-	modifier when_owns(address _owner, uint _amount) {
-		require (accounts[_owner].balance >= _amount);
-		_;
-	}
-
-	// no ETH should be sent with the transaction
-	modifier when_no_eth {
-		require (msg.value == 0);
-		_;
-	}
-
-	modifier when_liquid(address who) {
-		require (accounts[who].liquid);
-		_;
-	}
-
-	// a value should be > 0
-	modifier when_non_zero(uint _value) {
-		require (_value > 0);
-		_;
-	}
-
-	// available token supply
-	uint public totalSupply;
-
-	// storage and mapping of all balances & allowances
-	mapping (address => Account) accounts;
-
 	// constructor sets the parameters of execution, _totalSupply is all units
 	function FrozenToken(uint _totalSupply, address _owner) public
 		when_no_eth
@@ -111,6 +82,36 @@ contract FrozenToken is Owned, Token {
 		assert(false);
 	}
 
+	// the balance should be available
+	modifier when_owns(address _owner, uint _amount) {
+		require (accounts[_owner].balance >= _amount);
+		_;
+	}
+
+	// no ETH should be sent with the transaction
+	modifier when_no_eth {
+		require (msg.value == 0);
+		_;
+	}
+
+	modifier when_liquid(address who) {
+		require (accounts[who].liquid);
+		_;
+	}
+
+	// a value should be > 0
+	modifier when_non_zero(uint _value) {
+		require (_value > 0);
+		_;
+	}
+
+	// Available token supply
+	uint public totalSupply;
+
+	// Storage and mapping of all balances & allowances
+	mapping (address => Account) accounts;
+
+	// Conventional metadata.
 	string public constant name = "Frozen Token";
 	string public constant symbol = "FRZ";
 	uint8 public constant decimals = 3;
