@@ -1,7 +1,7 @@
 //! Copyright Parity Technologies, 2017.
 //! Released under the Apache Licence 2.
 
-pragma solidity ^0.4.15;
+pragma solidity ^0.4.16;
 
 /// Stripped down ERC20 standard token interface.
 contract Token {
@@ -76,28 +76,29 @@ contract SecondPriceAuction {
 		admin = _admin;
 		beginTime = _beginTime;
 		tokenCap = _tokenCap;
-		endTime = beginTime + 1000000;
+		endTime = beginTime + 15 days;
 	}
+
+	// No default function, entry-level users
+	function() { assert(false); }
 
 	// Public interaction:
 
 	/// Buyin function. Throws if the sale is not active. May refund some of the
 	/// funds if they would end the sale.
 	function buyin(uint8 v, bytes32 r, bytes32 s)
+		public
 		payable
 		when_not_halted
 		when_active
-		avoid_dust
-		only_signed(msg.sender, v, r, s)
-		only_basic(msg.sender)
-		only_certified_non_us(msg.sender)
+		only_eligable(msg.sender, v, r, s)
 	{
 		flushEra();
 
 		uint accounted;
 		bool refund;
 		uint price;
-		(accounted, refund, price) = theDeal(msg.value, false);
+		(accounted, refund, price) = theDeal(msg.value);
 
 		/// No refunds allowed.
 		require (!refund);
@@ -114,35 +115,9 @@ contract SecondPriceAuction {
 		require (treasury.send(msg.value));
 	}
 
-	/// Like buyin except no payment required.
-	function prepayBuyin(uint8 v, bytes32 r, bytes32 s, address _who, uint128 _value)
-	    when_not_halted
-	    when_active
-	    only_admin
-	    only_signed(_who, v, r, s)
-	    only_basic(_who)
-	    only_certified(_who)
-	{
-		flushEra();
-
-		uint accounted;
-		bool refund;
-		uint price;
-		(accounted, refund, price) = theDeal(_value, false);
-
-		/// No refunds allowed.
-		require (!refund);
-
-		buyins[_who].accounted += uint128(accounted);
-		buyins[_who].received += uint128(_value);
-		totalAccounted += accounted;
-		totalReceived += _value;
-		endTime = calculateEndTime();
-		PrepayBuyin(_who, accounted, _value, price);
-	}
-
 	/// Like buyin except no payment required and bonus automatically given.
 	function inject(address _who, uint128 _received)
+		public
 	    only_admin
 	    only_basic(_who)
 	{
@@ -159,6 +134,7 @@ contract SecondPriceAuction {
 
 	/// Mint tokens for a particular participant.
 	function finalise(address _who)
+		public
 		when_not_halted
 		when_ended
 		only_buyins(_who)
@@ -183,6 +159,9 @@ contract SecondPriceAuction {
 		}
 	}
 
+	// Prviate utilities:
+
+	/// Ensure the era tracker is prepared in case the current changed.
 	function flushEra() private {
 		uint currentEra = (now - beginTime) / ERA_PERIOD;
 		if (currentEra > eraIndex) {
@@ -230,17 +209,16 @@ contract SecondPriceAuction {
 
 	/// Get the number of `tokens` that would be given if the sender were to
 	/// spend `_value` now. Also tell you what `refund` would be given, if any.
-	function theDeal(uint _value, bool _isDeposit)
+	function theDeal(uint _value)
 		constant
 		returns (uint accounted, bool refund, uint price)
 	{
 		if (!isActive()) return;
 
 		uint bonus = this.bonus(_value);
-		uint hit = _isDeposit ? _value * (100 - DEPOSIT_HIT) / 100 : 0;
 
 		price = currentPrice();
-		accounted = _value + bonus - hit;
+		accounted = _value + bonus;
 
 		uint available = tokensAvailable();
 		uint tokens = accounted / price;
@@ -285,29 +263,27 @@ contract SecondPriceAuction {
 	/// Ensure we're not halted.
 	modifier when_not_halted { require (!halted); _; }
 
-	/// Ensure all buyins have finalised.
-	modifier when_all_finalised { require (allFinalised()); _; }
-
-	/// Ensure the sender sent a sensible amount of ether.
-	modifier avoid_dust { require (msg.value >= DUST_LIMIT); _; }
-
 	/// Ensure `_who` is a participant.
 	modifier only_buyins(address _who) { require (buyins[_who].accounted != 0); _; }
 
 	/// Ensure sender is admin.
 	modifier only_admin { require (msg.sender == admin); _; }
 
-	/// Ensure that the signature is valid.
-	modifier only_signed(address who, uint8 v, bytes32 r, bytes32 s) { require (ecrecover(STATEMENT_HASH, v, r, s) == who); _; }
+	/// Ensure that the signature is valid, `who` is a certified, basic account,
+	/// the gas price is sufficiently low and the value is sufficiently high.
+	modifier only_eligable(address who, uint8 v, bytes32 r, bytes32 s) {
+		require (
+			ecrecover(STATEMENT_HASH, v, r, s) == who &&
+			certifier.certified(who) &&
+			isBasicAccount(who) &&
+			tx.gasprice <= 5000000000 &&
+			msg.value >= DUST_LIMIT
+		);
+		_;
+	}
 
 	/// Ensure sender is not a contract.
 	modifier only_basic(address who) { require (isBasicAccount(who)); _; }
-
-    /// Ensure sender is KYCed.
-	modifier only_certified(address who) {
-		require (certifier.certified(who));
-		_;
-	}
 
 	// State:
 
