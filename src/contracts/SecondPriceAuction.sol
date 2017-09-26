@@ -351,7 +351,7 @@ contract SecondPriceAuction {
 	bytes32 constant public STATEMENT_HASH = sha3(STATEMENT);
 
 	/// The statement which should be signed.
-	string constant public STATEMENT = "\x19Ethereum Signed Message:\n47TODO: len(terms), terms";
+	string constant public STATEMENT = "\x19Ethereum Signed Message:\n47Please take my Ether and try to build Polkadot.";
 
 	//# Statement to actually sign.
 	//# ```js
