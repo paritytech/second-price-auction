@@ -1,11 +1,11 @@
 //! Copyright Parity Technologies, 2017.
 //! Released under the Apache Licence 2.
 
-pragma solidity ^0.4.16;
+pragma solidity ^0.4.17;
 
 /// Stripped down ERC20 standard token interface.
 contract Token {
-	function transfer(address _to, uint256 _value) returns (bool success);
+	function transfer(address _to, uint256 _value) public returns (bool success);
 }
 
 // From Owned.sol
@@ -14,7 +14,7 @@ contract Owned {
 
 	event NewOwner(address indexed old, address indexed current);
 
-	function setOwner(address _new) only_owner { NewOwner(owner, _new); owner = _new; }
+	function setOwner(address _new) public only_owner { NewOwner(owner, _new); owner = _new; }
 
 	address public owner = msg.sender;
 }
@@ -23,10 +23,10 @@ contract Owned {
 contract Certifier {
 	event Confirmed(address indexed who);
 	event Revoked(address indexed who);
-	function certified(address) constant returns (bool);
-	function get(address, string) constant returns (bytes32) {}
-	function getAddress(address, string) constant returns (address) {}
-	function getUint(address, string) constant returns (uint) {}
+	function certified(address) public constant returns (bool);
+	function get(address, string) public constant returns (bytes32);
+	function getAddress(address, string) public constant returns (address);
+	function getUint(address, string) public constant returns (uint);
 }
 
 /// Simple Dutch Auction contract. Price starts high and monotonically decreases
@@ -69,7 +69,13 @@ contract SecondPriceAuction {
 
 	/// Simple constructor.
 	/// Token cap should take be in whole tokens, not smallest divisible units.
-	function SecondPriceAuction(address _tokenContract, address _treasury, address _admin, uint _beginTime, uint _tokenCap) {
+	function SecondPriceAuction(
+        address _tokenContract,
+        address _treasury,
+        address _admin,
+        uint _beginTime,
+        uint _tokenCap
+    ) public {
 		tokenContract = Token(_tokenContract);
 		treasury = _treasury;
 		admin = _admin;
@@ -79,7 +85,7 @@ contract SecondPriceAuction {
 	}
 
 	// No default function, entry-level users
-	function() { assert(false); }
+	function() public { assert(false); }
 
 	// Public interaction:
 
@@ -172,15 +178,15 @@ contract SecondPriceAuction {
 	// Admin interaction:
 
 	/// Emergency function to pause buy-in and finalisation.
-	function setHalted(bool _halted) only_admin { halted = _halted; }
+	function setHalted(bool _halted) public only_admin { halted = _halted; }
 
 	/// Emergency function to drain the contract of any funds.
-	function drain() only_admin { require (treasury.send(this.balance)); }
+	function drain() public only_admin { require (treasury.send(this.balance)); }
 
 	// Inspection:
 
 	/// The current end time of the sale assuming that nobody else buys in.
-	function calculateEndTime() constant returns (uint) {
+	function calculateEndTime() public constant returns (uint) {
 		var factor = tokenCap / DIVISOR * USDWEI;
 		return beginTime + 18432000 * factor / (totalAccounted + 5 * factor) - 5760;
 	}
@@ -188,20 +194,20 @@ contract SecondPriceAuction {
 	/// The current price for a single indivisible part of a token. If a buyin happens now, this is
 	/// the highest price per indivisible token part that the buyer will pay. This doesn't
 	/// include the discount which may be available.
-	function currentPrice() constant returns (uint weiPerIndivisibleTokenPart) {
+	function currentPrice() public constant returns (uint weiPerIndivisibleTokenPart) {
 		if (!isActive()) return 0;
 		return (USDWEI * 18432000 / (now - beginTime + 5760) - USDWEI * 5) / DIVISOR;
 	}
 
 	/// Returns the total indivisible token parts available for purchase right now.
-	function tokensAvailable() constant returns (uint tokens) {
+	function tokensAvailable() public constant returns (uint tokens) {
 		if (!isActive()) return 0;
 		return tokenCap - totalAccounted / currentPrice();
 	}
 
 	/// The largest purchase than can be made at present, not including any
 	/// discount.
-	function maxPurchase() constant returns (uint spend) {
+	function maxPurchase() public constant returns (uint spend) {
 		if (!isActive()) return 0;
 		return tokenCap * currentPrice() - totalAccounted;
 	}
@@ -209,6 +215,7 @@ contract SecondPriceAuction {
 	/// Get the number of `tokens` that would be given if the sender were to
 	/// spend `_value` now. Also tell you what `refund` would be given, if any.
 	function theDeal(uint _value)
+        public
 		constant
 		returns (uint accounted, bool refund, uint price)
 	{
@@ -226,6 +233,7 @@ contract SecondPriceAuction {
 
 	/// Any applicable bonus to `_value`.
 	function bonus(uint _value)
+        public
 		constant
 		returns (uint extra)
 	{
@@ -237,13 +245,13 @@ contract SecondPriceAuction {
 	}
 
 	/// True if the sale is ongoing.
-	function isActive() constant returns (bool) { return now >= beginTime && now < endTime; }
+	function isActive() public constant returns (bool) { return now >= beginTime && now < endTime; }
 
 	/// True if all buyins have finalised.
-	function allFinalised() constant returns (bool) { return now >= endTime && totalAccounted == totalFinalised; }
+	function allFinalised() public constant returns (bool) { return now >= endTime && totalAccounted == totalFinalised; }
 
 	/// Returns true if the sender of this transaction is a basic account.
-	function isBasicAccount(address _who) internal returns (bool) {
+	function isBasicAccount(address _who) internal constant returns (bool) {
 		uint senderCodeSize;
 		assembly {
 			senderCodeSize := extcodesize(_who)
@@ -347,7 +355,7 @@ contract SecondPriceAuction {
 	uint constant public DUST_LIMIT = 5 finney;
 
 	/// The hash of the statement which must be signed in order to buyin.
-	bytes32 constant public STATEMENT_HASH = sha3(STATEMENT);
+	bytes32 constant public STATEMENT_HASH = keccak256(STATEMENT);
 
 	/// The statement which should be signed.
 	string constant public STATEMENT = "\x19Ethereum Signed Message:\n47Please take my Ether and try to build Polkadot.";
