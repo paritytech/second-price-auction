@@ -1,5 +1,5 @@
 //! FrozenToken ECR20-compliant token contract
-//! By Parity Team (Ethcore), 2016.
+//! By Parity Technologies, 2017.
 //! Released under the Apache Licence 2.
 
 pragma solidity ^0.4.16;
@@ -37,29 +37,26 @@ contract FrozenToken is Owned, Token {
 
 	// the balance should be available
 	modifier when_owns(address _owner, uint _amount) {
-		if (accounts[_owner].balance < _amount) throw;
+		require (accounts[_owner].balance >= _amount);
 		_;
 	}
 
 	// no ETH should be sent with the transaction
 	modifier when_no_eth {
-		if (msg.value > 0) throw;
+		require (msg.value == 0);
 		_;
 	}
 
 	modifier when_liquid(address who) {
-		if (!accounts[who].liquid) throw;
+		require (accounts[who].liquid);
 		_;
 	}
 
 	// a value should be > 0
 	modifier when_non_zero(uint _value) {
-		if (_value == 0) throw;
+		require (_value > 0);
 		_;
 	}
-
-	// the base, tokens denoted in micros
-	uint constant public base = 1000000;
 
 	// available token supply
 	uint public totalSupply;
