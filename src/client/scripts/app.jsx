@@ -1,12 +1,13 @@
 import moment from 'moment';
+import countries from 'i18n-iso-countries';
 import React from 'react';
 import BigNumber from 'bignumber.js';
-import {Button, Checkbox} from 'semantic-ui-react';
+import {Button, Checkbox, Label, Flag, Message} from 'semantic-ui-react';
 import {Bond, TransformBond, ReactivePromise} from 'oo7';
-import {capitalizeFirstLetter, removeSigningPrefix, singleton, formatBlockNumber, bonds} from 'oo7-parity';
+import {hexToAscii, capitalizeFirstLetter, removeSigningPrefix, singleton, formatBlockNumber, bonds} from 'oo7-parity';
 import {Rdiv, Rspan, ReactiveComponent} from 'oo7-react';
 import {AccountIcon, BalanceBond, TransactButton, SigningProgressLabel, InlineBalance} from 'parity-reactive-ui';
-import {DutchAuctionABI} from './abis.jsx';
+import {DutchAuctionABI, CCCertifierABI} from './abis.jsx';
 
 const tokenDivisor = 1000;
 const tokenTLA = 'WLS';
@@ -17,7 +18,11 @@ class TokenBalance extends ReactiveComponent {
 	}
 	readyRender () {
 		let n = Math.round(+this.state.value) / tokenDivisor;
-		return (<span><b>{n}</b> <span style={{fontSize: '85%'}}>{tokenTLA}</span></span>);
+		n = ('' + n).replace(/(\d)(?=(\d{3})+(\.|$))/g, "$1,")
+		let m = n.match(/([^\.]*)(.*)$/);
+		let whole = m[1];
+		let decimals = m[2];
+		return (<span><b>{whole}<span style={{fontSize: '85%', opacity: 0.66}}>{decimals}</span></b> <span style={{fontSize: '85%'}}>{tokenTLA}</span></span>);
 	}
 }
 
@@ -31,13 +36,13 @@ var drawSparkline = function(c, line, filled, cutoff) {
 
 		let deriv = [];
 		for (var i = 0; i < line.length; ++i) {
-			deriv[i] = filled[i] / line[i];
+			deriv[i] = filled[i];// / line[i];
 		}
 		let maxderiv = Math.max.apply(Math, deriv);
 
 		let max = 1; //maxfilled * 8;
 		let xstep = width / Math.max(line.length, 12 * 24 * 2);
-		let ystep = height / max;
+		let ystep = (height - 6) / maxderiv;
 
 		/*if (window.devicePixelRatio) {
 			c.width = c.width * window.devicePixelRatio;
@@ -141,7 +146,8 @@ class Eras extends ReactiveComponent {
 //var DutchAuction = singleton(() => bonds.makeContract('0x856EDD7F20d39f6Ef560a7B118a007A9Bc5CAbfD', DutchAuctionABI));
 //var DutchAuction = singleton(() => bonds.makeContract('0xC695F252Cb68021E99E020ebd3e817a82ADEe17F', DutchAuctionABI));
 //var DutchAuction = singleton(() => bonds.makeContract('0xe643110fBa0b7a72BA454B0AE98c5Cb6345fe34A', DutchAuctionABI));
-var DutchAuction = singleton(() => bonds.makeContract('0x778E173cA5822777Aa7c37c83ee598ef38D774A3', DutchAuctionABI));
+var DutchAuction = singleton(() => bonds.makeContract('0xb1b2F7cCE9F50e3Dea180Ce776495Ab0AAFFaB01', DutchAuctionABI));
+var CCCertifier = singleton(() => bonds.makeContract(DutchAuction().certifier(), CCCertifierABI));
 
 class ContributionPanel extends ReactiveComponent {
 	constructor() {
@@ -149,30 +155,45 @@ class ContributionPanel extends ReactiveComponent {
 			minPurchase: DutchAuction().currentPrice(),
 			maxPurchase: DutchAuction().maxPurchase()
 		});
+		this.state = {deposit: false};
         let d = '10 ether';
         this.spend = new Bond;
-		this.theDeal = DutchAuction().theDeal(this.spend);
+	}
+	deposit () {
+		return this.props.depositOnly || this.state.deposit;
 	}
 	render () {
+		var theDeal = DutchAuction().theDeal(this.spend, this.deposit());
 		return (<div id='contributionPanel'>
 			<BalanceBond
 				hintText="How much to spend?"
                 bond={this.spend}
 				disabled={!this.state.signature}
 			/>
+			<div style={{marginBottom: '1em'}}>
+			<Button.Group size='large'>
+			<Button disabled={!this.state.signature || this.props.depositOnly} active={!this.deposit()} onClick={() => this.setState({deposit: false})}>Spend</Button>
+			<Button.Or />
+			<Button disabled={!this.state.signature} active={this.deposit()} onClick={() => this.setState({deposit: true})}>Deposit</Button>
+			</Button.Group>
+			</div>
 			<p style={{textAlign: 'center', margin: '1em 2em'}}>
-				By spending <InlineBalance value={this.spend}/>, you will receive <Rspan>{this.theDeal.map(([accepted, refund, price, bonus]) =>
-					<b>at least <TokenBalance value={accepted / price}/></b>
+				<Rspan>{theDeal.map(([_, r]) => r
+					? <span>
+						<InlineBalance value={this.spend}/> is greater than the maximum spend.
+					</span>
+					: <span>
+						By {this.deposit() ? 'depositing' : 'spending'} <InlineBalance value={this.spend}/>, you will receive <Rspan>{theDeal.map(([accepted, refund, price]) =>
+							<b>at least <TokenBalance value={accepted / price}/></b>
+						)}</Rspan> when the network launches
+						{this.deposit() ? ', and be entitled to a 100% refund at any time before' : ''}
+					</span>
 				)}</Rspan>
-				<Rspan>{this.theDeal.map(([_, r]) => r > 0
-					? <span>and get <InlineBalance value={r}/> refunded</span>
-					: '')
-				}</Rspan>.
 			</p>
 			<TransactButton
 				content={`Purchase ${tokenTLA}s`}
-				tx={()=>this.props.onContribute(this.spend, this.state.signature)}
-				disabled={this.spend.map(s => !this.state.signature || !s || +s < +this.state.minPurchase || (this.state.request && !this.state.request.failed && !this.state.request.confirmed))}
+				tx={()=>this.props.onContribute(this.spend, this.state.signature, this.deposit())}
+				disabled={this.spend.map(s => !this.state.signature || !s || +s < +this.state.minPurchase || +s > +this.state.maxPurchase || (this.state.request && !this.state.request.failed && !this.state.request.confirmed))}
 			/>
 		</div>);
 	}
@@ -209,9 +230,15 @@ let contributionStatus = singleton(() => new TransformBond((h, b, e, c) =>
     bonds.head.timestamp.map(t => t / 1000)
 ]));
 
+const states = {
+	us: false,
+	gb: false,
+	jp: null
+};
+
 class Manager extends ReactiveComponent {
 	constructor() {
-		super([], { status: contributionStatus() });
+		super();
 		this.state = { signing: null, contribution: null };
 	}
 	handleSign () {
@@ -222,20 +249,18 @@ class Manager extends ReactiveComponent {
 			that.setState({signing});
 		});
 	}
-	handleContribute (value, signature) {
-		let t = DutchAuction().buyin(...signature, { value });
+	handleContribute (value, signature, deposit) {
+		let t = DutchAuction()[deposit ? 'deposit' : 'buyin'](...signature, { value });
 		this.setState({
 			contribution: t
 		});
 		return t;
 	}
 	render () {
-        return (this.state.status && this.state.status.active)
-          ? (
-			<div>
-			  <section id='terms'>
+        return (<div>
+			<section id='terms'>
 				<h1>Terms and Conditions</h1>
-				<p>TODO: Put some terms and conditions here</p>
+				<p><Rspan>{DutchAuction().STATEMENT().map(removeSigningPrefix)}</Rspan></p>
 				<TermsPanel
 				  request={this.state.signing}
 	  			  onRequest={this.handleSign.bind(this)}
@@ -244,17 +269,57 @@ class Manager extends ReactiveComponent {
 			  <section id='action'>
 				<h1>Send Funds</h1>
 				<ContributionPanel
+				  depositOnly={this.props.depositOnly}
 				  signature={this.state.signing ? this.state.signing.map(s => (s && s.signed || null)) : null}
 	              request={this.state.contribution}
 	              onContribute={this.handleContribute.bind(this)}
 	            />
 			  </section>
 			</div>
-		  )
-		  : (<h2 style={{textAlign: 'center', margin: '10em'}}>Contribution period not active</h2>);
+		);
 	}
 }
 
+class Bouncer extends ReactiveComponent {
+	constructor() {
+		super([], {
+			status: contributionStatus(),
+			kyc: CCCertifier().getCountryCode(bonds.me),
+			hit: DutchAuction().DEPOSIT_HIT()
+		});
+	}
+
+	render () {
+        return this.state.kyc === ''
+		  ? (<h2 style={{textAlign: 'center', margin: '10em'}}>This account is not registered to any identity. Please ensure you have associated the account with a valid document through any of the identity providers.</h2>)
+		  : (<div style={{paddingTop: '3em'}}>
+			  {
+		 	    states[this.state.kyc] === null
+				? <Message error>
+				  <Message.Header><Flag name={this.state.kyc}/>No participation allowed from {countries.getName(this.state.kyc, "en")}!</Message.Header>
+		  		  <p>Unfortunately, due to adverse regulations of your government, we are unable to allow you any kind of access into this token pre-sale. We hope this will change in the near future.</p>
+				</Message>
+				: (<div>{
+					states[this.state.kyc] === false
+					? <Message warning>
+					  <Message.Header><Flag name={this.state.kyc}/>Reduced participation allowed from {countries.getName(this.state.kyc, "en")}!</Message.Header>
+					  <p>Unfortunately, due to unclear regulations of your government, we are unable to allow you to pre-purchase tokens. You may instead make an entirely refundable deposit which may be converted to tokens once they are ready for sale. Since you have the option to gain a full refund at any time before the launch, the price paid in this way will be higher than the standard presale price: you will receive {+this.state.hit}% fewer tokens for the same funds.</p>
+					</Message>
+	  		  		: <Message info>
+					  <Message.Header><Flag name={this.state.kyc}/>Full participation allowed from {countries.getName(this.state.kyc, "en")}!</Message.Header>
+					  <p>You have two options for your contribution. You may either buy-in to the pre-sale now in which case you will receive your {tokenTLA} tokens on the network launch, or alternatively, you may instead make an entirely refundable deposit which is converted to tokens once the network is ready for launch. In this case, since you have the option to gain a refund at any time before the launch, the final price paid is higher than the standard presale price: you would receive {+this.state.hit}% fewer tokens for the same funds.</p>
+					</Message>}
+					{(this.state.status && this.state.status.active)
+			          ? <Manager depositOnly={states[this.state.kyc] === false} />
+					  : (<h2 style={{textAlign: 'center', margin: '10em'}}>
+					  	Contribution period not active
+					  </h2>)
+				    }
+				</div>)
+			  }
+			</div>);
+	}
+}
 class Subtitling extends ReactiveComponent {
 	constructor () {
 		super([], { isActive: DutchAuction().isActive(), allFinalised: DutchAuction().allFinalised(), totalReceived: DutchAuction().totalReceived() });
@@ -288,10 +353,10 @@ class AuctionSummary extends ReactiveComponent {
 		return this.state.isActive ?
 			(<div>
 			  <div className={'field'}>
-				<div>{tokenTLA}s Left</div>
-				<Rdiv
+				<div>Remaining for sale</div>
+				<div
 					className='_fieldValue _basic'
-				>{DutchAuction().tokensAvailable().map(t => `${t / tokenDivisor}`)}</Rdiv>
+				><TokenBalance value={DutchAuction().tokensAvailable()}/></div>
 			  </div>
 			  <div className={'field'}>
 				<div>Current Price</div>
@@ -352,28 +417,43 @@ class AuctionSummary extends ReactiveComponent {
 export class App extends ReactiveComponent {
 	constructor() {
 		super([], {
-			purchased: bonds.accounts.mapEach(a => DutchAuction().participants(a)).map(bs => bs.reduce((x, a) => [x[0].add(a[0]), x[1].add(a[1])])),
+			purchased: bonds.accounts.mapEach(a => DutchAuction().buyins(a)).map(bs => bs.reduce((x, a) => [x[0].add(a[0]), x[1].add(a[1])])),
+			deposited: bonds.accounts.mapEach(a => DutchAuction().deposits(a)).map(bs => bs.reduce((x, a) => [x[0].add(a[0]), x[1].add(a[1])])),
 			isActive: DutchAuction().isActive(),
 			allFinalised: DutchAuction().allFinalised(),
-			totalAccounted: DutchAuction().totalAccounted()
+			totalAccounted: DutchAuction().totalAccounted(),
+			bonus: DutchAuction().bonus(100),
 		});
 		let earliestBlock = DutchAuction().Ticked({limit: 1}).map(x => x.blockNumber - 2*7*24*60*4);
 		let ticks = DutchAuction().Ticked({limit: 50000, startBlock: earliestBlock});
-		this.eras = Bond.mapAll([DutchAuction().ERA_PERIOD(), DutchAuction().tokenCap(), DutchAuction().USDWEI(), ticks], (eraPeriod, tokenCap, usdWei, ticks) => {
-			console.log('mapped', +eraPeriod, +usdWei, ticks);
+		this.eras = Bond.mapAll([
+			DutchAuction().ERA_PERIOD(),
+			DutchAuction().tokenCap(),
+			DutchAuction().USDWEI(),
+			ticks,
+			DutchAuction().totalAccounted(),
+			DutchAuction().eraIndex(),
+			Bond.mapAll([
+				DutchAuction().ERA_PERIOD(),
+				DutchAuction().beginTime(),
+				bonds.time
+			], (p, b, n) => Math.ceil((n / 1000 - b) / p))
+		], (eraPeriod, tokenCap, usdWei, ticks, latestAccounted, latestEra, era) => {
+			console.log('mapped', +eraPeriod, +usdWei, ticks, +ticks[ticks.length - 1].era, era);
 			let erasAccounted = [];
 			let erasCap = [];
 			if (ticks.length > 0) {
-				let last = ticks[ticks.length - 1].era;
-				for (let i = 0, j = 0; i < last; ++i) {
-					if (ticks[j].era > i) {
-						// will never be called when erasAccounted is empty, since a non-empty t's first element will always be era 0.
-						erasAccounted.push(erasAccounted[erasAccounted.length - 1]);
+				let last = Math.max(era, latestEra);
+				for (let i = 0, j = 0; i <= last; ++i) {
+					if (i >= latestEra) {
+						erasAccounted.push(+latestAccounted);
+					}
+					else if (j >= ticks.length || ticks[j].era > i) {
+						erasAccounted.push(erasAccounted.length > 0 ? erasAccounted[erasAccounted.length - 1] : 0);
 					} else {
 						erasAccounted.push(+ticks[j].accounted);
 						j++;
 					}
-
 					let t = eraPeriod.mul(i);
 					erasCap.push(+tokenCap.div(1000).mul(usdWei.mul(18432000).div(t.add(5760)).sub(usdWei.mul(5))));
 				}
@@ -387,16 +467,18 @@ export class App extends ReactiveComponent {
 		window.bonds = bonds;
 		window.DutchAuction = DutchAuction;
 		window.DutchAuctionABI = DutchAuctionABI;
+		window.CCCertifier = CCCertifier;
 	}
 	render () {
 		let purchased = this.state.purchased;
+		let deposited = this.state.deposited;
 		return purchased == null ? <div/> : (<div className='site'>
 			<header>
 			  <nav className='nav-header'>
 				<div className='container'>
 				  <span id='logo'>
-					<AccountIcon address={DutchAuction().address} id='logoIcon'/>
-					WHITELABEL
+					<AccountIcon address={DutchAuction().address} id='logoIcon' style={{width: '3em', marginTop: '0.5em', boxShadow: '0px 2px 30px 0px rgba(0, 0, 0, 0.5)'}}/>
+					<span style={{marginLeft: '1em'}}>WHITELABEL</span>
 				  </span>
 				</div>
 			  </nav>
@@ -419,26 +501,45 @@ export class App extends ReactiveComponent {
 				</div>
 			  </section>
 			  {
-				+purchased == 0 ? null : (<section className='state-main'>
+				+purchased[1] == 0 && +deposited[1] == 0 ? null : (<section className='state-main'>
 					<div className='container'>
-					  You spent <InlineBalance
-					  	value={purchased[0].sub(purchased[1])}
-					  /> to buy {this.state.isActive ? (
+					  You {+purchased[1] > 0 ? (<span>spent <InlineBalance
+					  	value={purchased[1]}
+					  /></span>) : null}
+					  {+purchased[1] > 0 && +deposited[1] > 0 ? ' and ' : ''}
+					  {+purchased[1] > 0 ? (<span> deposited <InlineBalance
+					  	value={deposited[1]}
+					  /></span>) : null} to buy {this.state.isActive ? (
 						<span>at least <TokenBalance value={
-						  DutchAuction().currentPrice().map(_ => purchased[0].div(_))
+						  DutchAuction().currentPrice().map(_ => purchased[0].add(deposited[0]).div(_))
 					    }/></span>
 					  ) : (
 					    <span>exactly <TokenBalance value={
-					      DutchAuction().tokenCap().map(r => purchased[0].mul(r).div(this.state.totalAccounted))
+					      DutchAuction().tokenCap().map(r => purchased[0].add(deposited[0]).mul(r).div(this.state.totalAccounted))
 						}/></span>
 					  )}
+					</div>
+				</section>)
+			  }
+			  {
+				+this.state.bonus === 0 ? null : (<section className='bonus-main'>
+					<div className='container'>
+						<b>Bonus!</b> Purchases processed in the next <Rspan>{
+							Bond.mapAll([
+								DutchAuction().BONUS_DURATION(),
+								DutchAuction().beginTime(),
+								bonds.head.timestamp
+							], (d, b, n) => +b + +d - n / 1000)
+						}</Rspan> seconds receive an additional <b>
+							{+this.state.bonus}% {tokenTLA}
+						</b> tokens.
 					</div>
 				</section>)
 			  }
 			  <section className='contrib-main'>
 				<div className='container'>
 				  <div className='row'>
-					<Manager />
+					<Bouncer />
 				  </div>
 				</div>
 			  </section>

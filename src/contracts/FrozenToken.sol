@@ -1,8 +1,8 @@
-//! BasicCoin ECR20-compliant token contract
-//! By Parity Team (Ethcore), 2016.
+//! FrozenToken ECR20-compliant token contract
+//! By Parity Technologies, 2017.
 //! Released under the Apache Licence 2.
 
-pragma solidity ^0.4.7;
+pragma solidity ^0.4.16;
 
 // ECR20 standard token interface
 contract Token {
@@ -16,24 +16,18 @@ contract Token {
 	function allowance(address _owner, address _spender) constant returns (uint256 remaining);
 }
 
-// Owner-specific contract interface
+// From Owned.sol
 contract Owned {
+	modifier only_owner { require (msg.sender == owner); _; }
+
 	event NewOwner(address indexed old, address indexed current);
 
-	modifier only_owner {
-		if (msg.sender != owner) throw;
-		_;
-	}
+	function setOwner(address _new) only_owner { NewOwner(owner, _new); owner = _new; }
 
 	address public owner = msg.sender;
-
-	function setOwner(address _new) only_owner {
-		NewOwner(owner, _new);
-		owner = _new;
-	}
 }
 
-// BasicCoin, ECR20 tokens that all belong to the owner for sending around
+// FrozenToken, ECR20 tokens that all belong to the owner for sending around
 contract FrozenToken is Owned, Token {
 	// this is as basic as can be, only the associated balance & allowances
 	struct Account {
@@ -43,29 +37,26 @@ contract FrozenToken is Owned, Token {
 
 	// the balance should be available
 	modifier when_owns(address _owner, uint _amount) {
-		if (accounts[_owner].balance < _amount) throw;
+		require (accounts[_owner].balance >= _amount);
 		_;
 	}
 
 	// no ETH should be sent with the transaction
 	modifier when_no_eth {
-		if (msg.value > 0) throw;
+		require (msg.value == 0);
 		_;
 	}
 
 	modifier when_liquid(address who) {
-		if (!accounts[who].liquid) throw;
+		require (accounts[who].liquid);
 		_;
 	}
 
 	// a value should be > 0
 	modifier when_non_zero(uint _value) {
-		if (_value == 0) throw;
+		require (_value > 0);
 		_;
 	}
-
-	// the base, tokens denoted in micros
-	uint constant public base = 1000000;
 
 	// available token supply
 	uint public totalSupply;
@@ -74,7 +65,10 @@ contract FrozenToken is Owned, Token {
 	mapping (address => Account) accounts;
 
 	// constructor sets the parameters of execution, _totalSupply is all units
-	function BasicCoin(uint _totalSupply, address _owner) when_no_eth when_non_zero(_totalSupply) {
+	function FrozenToken(uint _totalSupply, address _owner)
+		when_no_eth
+		when_non_zero(_totalSupply)
+	{
 		totalSupply = _totalSupply;
 		owner = _owner;
 		accounts[_owner].balance = totalSupply;
@@ -114,4 +108,8 @@ contract FrozenToken is Owned, Token {
 	function() {
 		throw;
 	}
+
+	string public constant name = "Frozen Token";
+	string public constant symbol = "FRZ";
+	uint8 public constant decimals = 3;
 }

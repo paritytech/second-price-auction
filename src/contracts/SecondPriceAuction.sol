@@ -1,32 +1,56 @@
 //! Copyright Parity Technologies, 2017.
 //! Released under the Apache Licence 2.
 
-pragma solidity ^0.4.13;
+pragma solidity ^0.4.17;
 
 /// Stripped down ERC20 standard token interface.
 contract Token {
-	function transfer(address _to, uint256 _value) returns (bool success);
+	function transfer(address _to, uint256 _value) public returns (bool success);
 }
 
-/// Stripped Badge token interface.
+// From Owned.sol
+contract Owned {
+	modifier only_owner { require (msg.sender == owner); _; }
+
+	event NewOwner(address indexed old, address indexed current);
+
+	function setOwner(address _new) public only_owner { NewOwner(owner, _new); owner = _new; }
+
+	address public owner = msg.sender;
+}
+
+// From Certifier.sol
 contract Certifier {
-	function certified(address _who) constant returns (bool);
+	event Confirmed(address indexed who);
+	event Revoked(address indexed who);
+	function certified(address) public constant returns (bool);
+	function get(address, string) public constant returns (bytes32);
+	function getAddress(address, string) public constant returns (address);
+	function getUint(address, string) public constant returns (uint);
 }
 
-/// Simple Dutch Auction contract. Price starts high and monotonically decreases
-/// until all tokens are sold at the current price with currently received
-/// funds.
+/// Simple modified second price auction contract. Price starts high and monotonically decreases
+/// until all tokens are sold at the current price with currently received funds.
 contract SecondPriceAuction {
 	// Events:
 
 	/// Someone bought in at a particular max-price.
-	event Buyin(address indexed who, uint accepted, uint refund, uint price, uint bonus);
+	event Buyin(address indexed who, uint accounted, uint received, uint price);
+
+	/// Someone deposited in at a particular max-price.
+	event Deposited(address indexed who, uint accounted, uint received, uint price);
+
+	/// Someone moved their Ether out of the contract.
+	event DepositReturned(address indexed who, uint amount);
+
+	/// Someone moved their Ether out of the contract.
+	event DepositUsed(address indexed who, uint accounted, uint received);
 
 	/// Admin injected a purchase.
-	event Injected(address indexed who, uint accepted, uint bonus);
+	event Injected(address indexed who, uint accounted, uint received);
 
 	/// Admin injected a purchase.
-	event PrepayBuyin(address indexed who, uint accepted, uint price, uint bonus);
+	event PrepayBuyin(address indexed who, uint accounted, uint received, uint price);
 
 	/// At least 20 blocks have passed.
 	event Ticked(uint era, uint received, uint accounted);
@@ -44,99 +68,80 @@ contract SecondPriceAuction {
 
 	/// Simple constructor.
 	/// Token cap should take be in whole tokens, not smallest divisible units.
-	function SecondPriceAuction(address _tokenContract, address _treasury, address _admin, uint _beginTime, uint _tokenCap) {
+	function SecondPriceAuction(
+        address _tokenContract,
+        address _treasury,
+        address _admin,
+        uint _beginTime,
+        uint _tokenCap
+    ) public {
 		tokenContract = Token(_tokenContract);
 		treasury = _treasury;
 		admin = _admin;
 		beginTime = _beginTime;
 		tokenCap = _tokenCap;
-		endTime = beginTime + 1000000;
+		endTime = beginTime + 15 days;
 	}
+
+	// No default function, entry-level users
+	function() public { assert(false); }
 
 	// Public interaction:
 
 	/// Buyin function. Throws if the sale is not active. May refund some of the
 	/// funds if they would end the sale.
 	function buyin(uint8 v, bytes32 r, bytes32 s)
+		public
 		payable
 		when_not_halted
 		when_active
-		avoid_dust
-		only_signed(msg.sender, v, r, s)
-		only_basic(msg.sender)
-		only_certified(msg.sender)
+		only_eligable(msg.sender, v, r, s)
 	{
 		flushEra();
 
-		uint accepted;
-		uint refund;
+		uint accounted;
+		bool refund;
 		uint price;
-		uint bonus;
-		(accepted, refund, price, bonus) = theDeal(msg.value);
+		(accounted, refund, price) = theDeal(msg.value);
+
+		/// No refunds allowed.
+		require (!refund);
 
 		// record the acceptance.
-		participants[msg.sender].value += uint128(accepted);
-		participants[msg.sender].bonus += uint128(bonus);
-		totalAccounted += accepted;
-		totalReceived += accepted - bonus;
+		buyins[msg.sender].accounted += uint128(accounted);
+		buyins[msg.sender].received += uint128(msg.value);
+		totalAccounted += accounted;
+		totalReceived += msg.value;
 		endTime = calculateEndTime();
-		Buyin(msg.sender, accepted, refund, price, bonus);
+		Buyin(msg.sender, accounted, msg.value, price);
 
 		// send to treasury
-		require (treasury.send(accepted - bonus));
-		// issue refund
-		require (msg.sender.send(refund));
-	}
-
-	/// Like buyin except no payment required.
-	function prepayBuyin(uint8 v, bytes32 r, bytes32 s, address _who, uint128 _value)
-	    when_not_halted
-	    when_active
-	    only_admin
-	    only_signed(_who, v, r, s)
-	    only_basic(_who)
-	    only_certified(_who)
-	{
-		flushEra();
-
-		uint accepted;
-		uint refund;
-		uint price;
-		uint bonus;
-		(accepted, refund, price, bonus) = theDeal(_value);
-
-		/// No refunds allowed when pre-paid.
-		require (refund == 0);
-
-		participants[_who].value += uint128(accepted);
-		participants[_who].bonus += uint128(bonus);
-		totalAccounted += accepted;
-		totalReceived += accepted - bonus;
-		endTime = calculateEndTime();
-		PrepayBuyin(_who, accepted, price, bonus);
+		require (treasury.send(msg.value));
 	}
 
 	/// Like buyin except no payment required and bonus automatically given.
-	function inject(address _who, uint128 _spent)
+	function inject(address _who, uint128 _received)
+		public
 	    only_admin
 	    only_basic(_who)
 	{
-		uint128 bonus = _spent * uint128(BONUS_SIZE) / 100;
-		uint128 value = _spent + bonus;
+		uint128 bonus = _received * uint128(BONUS_SIZE) / 100;
+		uint128 accounted = _received + bonus;
 
-		participants[_who].value += value;
-		participants[_who].bonus += bonus;
-		totalAccounted += value;
-		totalReceived += _spent;
+		buyins[_who].accounted += accounted;
+		buyins[_who].received += _received;
+		totalAccounted += accounted;
+		totalReceived += _received;
 		endTime = calculateEndTime();
-		Injected(_who, value, bonus);
+		Injected(_who, accounted, _received);
 	}
 
 	/// Mint tokens for a particular participant.
 	function finalise(address _who)
+		public
 		when_not_halted
 		when_ended
-		only_participants(_who)
+		only_buyins(_who)
 	{
 		// end the auction if we're the first one to finalise.
 		if (endPrice == 0) {
@@ -145,10 +150,10 @@ contract SecondPriceAuction {
 		}
 
 		// enact the purchase.
-		uint total = participants[_who].value;
+		uint total = buyins[_who].accounted;
 		uint tokens = total / endPrice;
 		totalFinalised += total;
-		delete participants[_who];
+		delete buyins[_who];
 		require (tokenContract.transfer(_who, tokens));
 
 		Finalised(_who, tokens);
@@ -158,6 +163,9 @@ contract SecondPriceAuction {
 		}
 	}
 
+	// Prviate utilities:
+
+	/// Ensure the era tracker is prepared in case the current changed.
 	function flushEra() private {
 		uint currentEra = (now - beginTime) / ERA_PERIOD;
 		if (currentEra > eraIndex) {
@@ -169,18 +177,15 @@ contract SecondPriceAuction {
 	// Admin interaction:
 
 	/// Emergency function to pause buy-in and finalisation.
-	function setHalted(bool _halted) only_admin { halted = _halted; }
+	function setHalted(bool _halted) public only_admin { halted = _halted; }
 
 	/// Emergency function to drain the contract of any funds.
-	function drain() only_admin { require (treasury.send(this.balance)); }
-
-	/// Kill this contract once the sale is finished.
-	function kill() when_all_finalised { suicide(admin); }
+	function drain() public only_admin { require (treasury.send(this.balance)); }
 
 	// Inspection:
 
 	/// The current end time of the sale assuming that nobody else buys in.
-	function calculateEndTime() constant returns (uint) {
+	function calculateEndTime() public constant returns (uint) {
 		var factor = tokenCap / DIVISOR * USDWEI;
 		return beginTime + 18432000 * factor / (totalAccounted + 5 * factor) - 5760;
 	}
@@ -188,20 +193,20 @@ contract SecondPriceAuction {
 	/// The current price for a single indivisible part of a token. If a buyin happens now, this is
 	/// the highest price per indivisible token part that the buyer will pay. This doesn't
 	/// include the discount which may be available.
-	function currentPrice() constant returns (uint weiPerIndivisibleTokenPart) {
+	function currentPrice() public constant returns (uint weiPerIndivisibleTokenPart) {
 		if (!isActive()) return 0;
 		return (USDWEI * 18432000 / (now - beginTime + 5760) - USDWEI * 5) / DIVISOR;
 	}
 
 	/// Returns the total indivisible token parts available for purchase right now.
-	function tokensAvailable() constant returns (uint tokens) {
+	function tokensAvailable() public constant returns (uint tokens) {
 		if (!isActive()) return 0;
 		return tokenCap - totalAccounted / currentPrice();
 	}
 
 	/// The largest purchase than can be made at present, not including any
 	/// discount.
-	function maxPurchase() constant returns (uint spend) {
+	function maxPurchase() public constant returns (uint spend) {
 		if (!isActive()) return 0;
 		return tokenCap * currentPrice() - totalAccounted;
 	}
@@ -209,30 +214,25 @@ contract SecondPriceAuction {
 	/// Get the number of `tokens` that would be given if the sender were to
 	/// spend `_value` now. Also tell you what `refund` would be given, if any.
 	function theDeal(uint _value)
+        public
 		constant
-		returns (uint accepted, uint refund, uint price, uint bonus)
+		returns (uint accounted, bool refund, uint price)
 	{
 		if (!isActive()) return;
-		bonus = this.bonus(_value);
-		price = currentPrice();
-		accepted = _value + bonus;
-		uint available = tokensAvailable();
-		uint tokens = accepted / price;
-		refund = 0;
 
-		// if we've asked for too many, we should send back the extra.
-		if (tokens > available) {
-			// only accept enough of it to make sense.
-			accepted = available * price;
-			if (_value > accepted) {
-				// bonus doesn't count in the refund.
-				refund = _value - accepted;
-			}
-		}
+		uint bonus = this.bonus(_value);
+
+		price = currentPrice();
+		accounted = _value + bonus;
+
+		uint available = tokensAvailable();
+		uint tokens = accounted / price;
+		refund = (tokens > available);
 	}
 
-	/// Any applicable bonus to `_value` and returns it.
+	/// Any applicable bonus to `_value`.
 	function bonus(uint _value)
+        public
 		constant
 		returns (uint extra)
 	{
@@ -244,13 +244,13 @@ contract SecondPriceAuction {
 	}
 
 	/// True if the sale is ongoing.
-	function isActive() constant returns (bool) { return now >= beginTime && now < endTime; }
+	function isActive() public constant returns (bool) { return now >= beginTime && now < endTime; }
 
-	/// True if all participants have finalised.
-	function allFinalised() constant returns (bool) { return now >= endTime && totalAccounted == totalFinalised; }
+	/// True if all buyins have finalised.
+	function allFinalised() public constant returns (bool) { return now >= endTime && totalAccounted == totalFinalised; }
 
 	/// Returns true if the sender of this transaction is a basic account.
-	function isBasicAccount(address _who) internal returns (bool) {
+	function isBasicAccount(address _who) internal constant returns (bool) {
 		uint senderCodeSize;
 		assembly {
 			senderCodeSize := extcodesize(_who)
@@ -269,47 +269,42 @@ contract SecondPriceAuction {
 	/// Ensure we're not halted.
 	modifier when_not_halted { require (!halted); _; }
 
-	/// Ensure all participants have finalised.
-	modifier when_all_finalised { require (allFinalised()); _; }
-
-	/// Ensure the sender sent a sensible amount of ether.
-	modifier avoid_dust { require (msg.value >= DUST_LIMIT); _; }
-
 	/// Ensure `_who` is a participant.
-	modifier only_participants(address _who) { require (participants[_who].value != 0); _; }
+	modifier only_buyins(address _who) { require (buyins[_who].accounted != 0); _; }
 
 	/// Ensure sender is admin.
 	modifier only_admin { require (msg.sender == admin); _; }
 
-	/// Ensure that the signature is valid.
-	modifier only_signed(address who, uint8 v, bytes32 r, bytes32 s) { require (ecrecover(STATEMENT_HASH, v, r, s) == who); _; }
+	/// Ensure that the signature is valid, `who` is a certified, basic account,
+	/// the gas price is sufficiently low and the value is sufficiently high.
+	modifier only_eligable(address who, uint8 v, bytes32 r, bytes32 s) {
+		require (
+			ecrecover(STATEMENT_HASH, v, r, s) == who &&
+			certifier.certified(who) &&
+			isBasicAccount(who) &&
+			tx.gasprice <= 5000000000 &&
+			msg.value >= DUST_LIMIT
+		);
+		_;
+	}
 
 	/// Ensure sender is not a contract.
 	modifier only_basic(address who) { require (isBasicAccount(who)); _; }
 
-    /// Ensure sender has signed the contract.
-	modifier only_certified(address who) {
-		require (certifier.certified(who) || (
-			tx.gasprice <= 1000000000 &&
-			msg.value <= 100 finney
-		));
-		_;
-	}
-
 	// State:
 
-	struct Participant {
-		uint128 value;
-		uint128 bonus;
+	struct Account {
+		uint128 accounted;	// including bonus & hit
+		uint128 received;	// just the amount received, without bonus & hit
 	}
 
-	/// The auction participants.
-	mapping (address => Participant) public participants;
+	/// Those who have bought in to the auction.
+	mapping (address => Account) public buyins;
 
 	/// Total amount of ether received, excluding phantom "bonus" ether.
 	uint public totalReceived = 0;
 
-	/// Total amount of ether received, including phantom "bonus" ether.
+	/// Total amount of ether accounted for, including phantom "bonus" ether.
 	uint public totalAccounted = 0;
 
 	/// Total amount of ether which has been finalised.
@@ -331,7 +326,7 @@ contract SecondPriceAuction {
 	Token public tokenContract;
 
 	/// The certifier.
-	Certifier public certifier = Certifier(0xeAcDEd0D0D6a6145d03Cd96A19A165D56FA122DF);
+	Certifier public certifier = Certifier(0xaEBd300d5Bc5f357cF35715C0169985484A70184);
 
 	/// The treasury address; where all the Ether goes.
 	address public treasury;
@@ -359,7 +354,7 @@ contract SecondPriceAuction {
 	uint constant public DUST_LIMIT = 5 finney;
 
 	/// The hash of the statement which must be signed in order to buyin.
-	bytes32 constant public STATEMENT_HASH = sha3(STATEMENT);
+	bytes32 constant public STATEMENT_HASH = keccak256(STATEMENT);
 
 	/// The statement which should be signed.
 	string constant public STATEMENT = "\x19Ethereum Signed Message:\n47Please take my Ether and try to build Polkadot.";
@@ -376,7 +371,7 @@ contract SecondPriceAuction {
 	uint constant public BONUS_DURATION = 1 hours;
 
 	/// Number of Wei in one USD, constant.
-	uint constant public USDWEI = 1 ether / 200;
+	uint constant public USDWEI = 1 ether / 250;
 
 	/// Divisor of the token.
 	uint constant public DIVISOR = 1000;
