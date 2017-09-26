@@ -4,18 +4,6 @@
 
 pragma solidity ^0.4.17;
 
-// ECR20 standard token interface
-contract Token {
-	event Transfer(address indexed from, address indexed to, uint256 value);
-	event Approval(address indexed owner, address indexed spender, uint256 value);
-
-	function balanceOf(address _owner) public constant returns (uint256 balance);
-	function transfer(address _to, uint256 _value) public returns (bool success);
-	function transferFrom(address _from, address _to, uint256 _value) public returns (bool success);
-	function approve(address _spender, uint256 _value) public returns (bool success);
-	function allowance(address _owner, address _spender) public constant returns (uint256 remaining);
-}
-
 // From Owned.sol
 contract Owned {
 	modifier only_owner { require (msg.sender == owner); _; }
@@ -27,8 +15,15 @@ contract Owned {
 	address public owner = msg.sender;
 }
 
-// FrozenToken, ECR20 tokens that all belong to the owner for sending around
-contract FrozenToken is Owned, Token {
+// FrozenToken, a bit like an ECR20 token (though not - as it doesn't
+// implement most of the API).
+// All token balances are generally non-transferable.
+// All "tokens" belong to the owner (who is uniquely liquid) at construction.
+// Liquid accounts can make other accounts liquid and send their tokens
+// to other axccounts.
+contract FrozenToken is Owned {
+	event Transfer(address indexed from, address indexed to, uint256 value);
+
 	// this is as basic as can be, only the associated balance & allowances
 	struct Account {
 		uint balance;
@@ -36,7 +31,8 @@ contract FrozenToken is Owned, Token {
 	}
 
 	// constructor sets the parameters of execution, _totalSupply is all units
-	function FrozenToken(uint _totalSupply, address _owner) public
+	function FrozenToken(uint _totalSupply, address _owner)
+        public
 		when_no_eth
 		when_non_zero(_totalSupply)
 	{

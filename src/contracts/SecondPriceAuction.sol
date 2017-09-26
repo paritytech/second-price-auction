@@ -37,20 +37,8 @@ contract SecondPriceAuction {
 	/// Someone bought in at a particular max-price.
 	event Buyin(address indexed who, uint accounted, uint received, uint price);
 
-	/// Someone deposited in at a particular max-price.
-	event Deposited(address indexed who, uint accounted, uint received, uint price);
-
-	/// Someone moved their Ether out of the contract.
-	event DepositReturned(address indexed who, uint amount);
-
-	/// Someone moved their Ether out of the contract.
-	event DepositUsed(address indexed who, uint accounted, uint received);
-
 	/// Admin injected a purchase.
 	event Injected(address indexed who, uint accounted, uint received);
-
-	/// Admin injected a purchase.
-	event PrepayBuyin(address indexed who, uint accounted, uint received, uint price);
 
 	/// At least 20 blocks have passed.
 	event Ticked(uint era, uint received, uint accounted);
