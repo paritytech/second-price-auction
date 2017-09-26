@@ -1,27 +1,27 @@
-//! BasicCoin ECR20-compliant token contract
-//! By Parity Team (Ethcore), 2016.
+//! Frozen Token contract.
+//! Copyright Parity Technologies, 2017.
 //! Released under the Apache Licence 2.
 
-pragma solidity ^0.4.7;
+pragma solidity ^0.4.16;
 
-// ECR20 standard token interface
-contract Token {
-	event Transfer(address indexed from, address indexed to, uint256 value);
-	event Approval(address indexed owner, address indexed spender, uint256 value);
-
-	function balanceOf(address _owner) constant returns (uint256 balance);
-	function transfer(address _to, uint256 _value) returns (bool success);
-	function transferFrom(address _from, address _to, uint256 _value) returns (bool success);
-	function approve(address _spender, uint256 _value) returns (bool success);
-	function allowance(address _owner, address _spender) constant returns (uint256 remaining);
+// https://github.com/ethereum/EIPs/issues/20
+contract ERC20 {
+	function totalSupply() constant returns (uint totalSupply);
+	function balanceOf(address _owner) constant returns (uint balance);
+	function transfer(address _to, uint _value) returns (bool success);
+	function transferFrom(address _from, address _to, uint _value) returns (bool success);
+	function approve(address _spender, uint _value) returns (bool success);
+	function allowance(address _owner, address _spender) constant returns (uint remaining);
+	event Transfer(address indexed _from, address indexed _to, uint _value);
+	event Approval(address indexed _owner, address indexed _spender, uint _value);
 }
 
-// Owner-specific contract interface
+// From Owned.sol
 contract Owned {
 	event NewOwner(address indexed old, address indexed current);
 
 	modifier only_owner {
-		if (msg.sender != owner) throw;
+		require (msg.sender == owner);
 		_;
 	}
 
@@ -33,8 +33,12 @@ contract Owned {
 	}
 }
 
-// BasicCoin, ECR20 tokens that all belong to the owner for sending around
-contract FrozenToken is Owned, Token {
+// FrozenCoin, ECR20 tokens that all belong to the owner for sending around
+contract FrozenToken is Owned, ERC20 {
+	string public constant name = "Frozen Token";
+	string public constant symbol = "FRZ";
+	uint8 public constant decimals = 3;
+
 	// this is as basic as can be, only the associated balance & allowances
 	struct Account {
 		uint balance;
@@ -43,29 +47,26 @@ contract FrozenToken is Owned, Token {
 
 	// the balance should be available
 	modifier when_owns(address _owner, uint _amount) {
-		if (accounts[_owner].balance < _amount) throw;
+		require (accounts[_owner].balance >= _amount);
 		_;
 	}
 
 	// no ETH should be sent with the transaction
 	modifier when_no_eth {
-		if (msg.value > 0) throw;
+		require (msg.value == 0);
 		_;
 	}
 
 	modifier when_liquid(address who) {
-		if (!accounts[who].liquid) throw;
+		require (accounts[who].liquid);
 		_;
 	}
 
 	// a value should be > 0
 	modifier when_non_zero(uint _value) {
-		if (_value == 0) throw;
+		require (_value > 0);
 		_;
 	}
-
-	// the base, tokens denoted in micros
-	uint constant public base = 1000000;
 
 	// available token supply
 	uint public totalSupply;
@@ -74,7 +75,7 @@ contract FrozenToken is Owned, Token {
 	mapping (address => Account) accounts;
 
 	// constructor sets the parameters of execution, _totalSupply is all units
-	function BasicCoin(uint _totalSupply, address _owner) when_no_eth when_non_zero(_totalSupply) {
+	function FrozenToken(uint _totalSupply, address _owner) when_no_eth when_non_zero(_totalSupply) {
 		totalSupply = _totalSupply;
 		owner = _owner;
 		accounts[_owner].balance = totalSupply;
@@ -111,7 +112,5 @@ contract FrozenToken is Owned, Token {
 	}
 
 	// no default function, simple contract only, entry-level users
-	function() {
-		throw;
-	}
+	function() { assert(false); }
 }
