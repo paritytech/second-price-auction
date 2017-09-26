@@ -1,8 +1,8 @@
-//! BasicCoin ECR20-compliant token contract
+//! FrozenToken ECR20-compliant token contract
 //! By Parity Team (Ethcore), 2016.
 //! Released under the Apache Licence 2.
 
-pragma solidity ^0.4.7;
+pragma solidity ^0.4.16;
 
 // ECR20 standard token interface
 contract Token {
@@ -18,7 +18,7 @@ contract Token {
 
 // From Owned.sol
 contract Owned {
-	modifier only_owner { require (msg.sender == owner) return; _; }
+	modifier only_owner { require (msg.sender == owner); _; }
 
 	event NewOwner(address indexed old, address indexed current);
 
@@ -27,7 +27,7 @@ contract Owned {
 	address public owner = msg.sender;
 }
 
-// BasicCoin, ECR20 tokens that all belong to the owner for sending around
+// FrozenToken, ECR20 tokens that all belong to the owner for sending around
 contract FrozenToken is Owned, Token {
 	// this is as basic as can be, only the associated balance & allowances
 	struct Account {

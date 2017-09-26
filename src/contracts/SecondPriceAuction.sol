@@ -30,9 +30,8 @@ contract Certifier {
 	function getUint(address, string) constant returns (uint) {}
 }
 
-/// Simple Dutch Auction contract. Price starts high and monotonically decreases
-/// until all tokens are sold at the current price with currently received
-/// funds.
+/// Simple modified second price auction contract. Price starts high and monotonically decreases
+/// until all tokens are sold at the current price with currently received funds.
 contract SecondPriceAuction {
 	// Events:
 
