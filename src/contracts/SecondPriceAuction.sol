@@ -326,7 +326,7 @@ contract SecondPriceAuction {
 	Token public tokenContract;
 
 	/// The certifier.
-	Certifier public certifier = Certifier(0xaEBd300d5Bc5f357cF35715C0169985484A70184);
+	Certifier public certifier = Certifier(0x06C4AF12D9E3501C173b5D1B9dd9cF6DCC095b98);
 
 	/// The treasury address; where all the Ether goes.
 	address public treasury;

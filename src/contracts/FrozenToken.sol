@@ -2,18 +2,18 @@
 //! By Parity Technologies, 2017.
 //! Released under the Apache Licence 2.
 
-pragma solidity ^0.4.16;
+pragma solidity ^0.4.17;
 
 // ECR20 standard token interface
 contract Token {
 	event Transfer(address indexed from, address indexed to, uint256 value);
 	event Approval(address indexed owner, address indexed spender, uint256 value);
 
-	function balanceOf(address _owner) constant returns (uint256 balance);
-	function transfer(address _to, uint256 _value) returns (bool success);
-	function transferFrom(address _from, address _to, uint256 _value) returns (bool success);
-	function approve(address _spender, uint256 _value) returns (bool success);
-	function allowance(address _owner, address _spender) constant returns (uint256 remaining);
+	function balanceOf(address _owner) public constant returns (uint256 balance);
+	function transfer(address _to, uint256 _value) public returns (bool success);
+	function transferFrom(address _from, address _to, uint256 _value) public returns (bool success);
+	function approve(address _spender, uint256 _value) public returns (bool success);
+	function allowance(address _owner, address _spender) public constant returns (uint256 remaining);
 }
 
 // From Owned.sol
@@ -22,7 +22,7 @@ contract Owned {
 
 	event NewOwner(address indexed old, address indexed current);
 
-	function setOwner(address _new) only_owner { NewOwner(owner, _new); owner = _new; }
+	function setOwner(address _new) public only_owner { NewOwner(owner, _new); owner = _new; }
 
 	address public owner = msg.sender;
 }
@@ -65,7 +65,7 @@ contract FrozenToken is Owned, Token {
 	mapping (address => Account) accounts;
 
 	// constructor sets the parameters of execution, _totalSupply is all units
-	function FrozenToken(uint _totalSupply, address _owner)
+	function FrozenToken(uint _totalSupply, address _owner) public
 		when_no_eth
 		when_non_zero(_totalSupply)
 	{
@@ -76,12 +76,13 @@ contract FrozenToken is Owned, Token {
 	}
 
 	// balance of a specific address
-	function balanceOf(address _who) constant returns (uint256) {
+	function balanceOf(address _who) public constant returns (uint256) {
 		return accounts[_who].balance;
 	}
 
 	// make an account liquid: only liquid accounts can do this.
 	function makeLiquid(address _to)
+		public
 		when_no_eth
 		when_liquid(msg.sender)
 		returns(bool)
@@ -92,6 +93,7 @@ contract FrozenToken is Owned, Token {
 
 	// transfer
 	function transfer(address _to, uint256 _value)
+		public
 		when_no_eth
 		when_owns(msg.sender, _value)
 		when_liquid(msg.sender)
@@ -105,8 +107,8 @@ contract FrozenToken is Owned, Token {
 	}
 
 	// no default function, simple contract only, entry-level users
-	function() {
-		throw;
+	function() public {
+		assert(false);
 	}
 
 	string public constant name = "Frozen Token";
