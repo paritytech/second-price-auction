@@ -2,17 +2,23 @@
 //! By Parity Technologies, 2017.
 //! Released under the Apache Licence 2.
 
-pragma solidity ^0.4.7;
+pragma solidity ^0.4.13;
 
 // From Owned.sol
 contract Owned {
-	modifier only_owner { if (msg.sender != owner) return; _; }
-
 	event NewOwner(address indexed old, address indexed current);
 
-	function setOwner(address _new) only_owner { NewOwner(owner, _new); owner = _new; }
+	modifier only_owner {
+		require (msg.sender == owner);
+		_;
+	}
 
 	address public owner = msg.sender;
+
+	function setOwner(address _new) only_owner {
+		NewOwner(owner, _new);
+		owner = _new;
+	}
 }
 
 // From Certifier.sol

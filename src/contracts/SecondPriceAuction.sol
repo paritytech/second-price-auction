@@ -50,7 +50,7 @@ contract SecondPriceAuction {
 		admin = _admin;
 		beginTime = _beginTime;
 		tokenCap = _tokenCap;
-		endTime = beginTime + 1000000;
+		endTime = beginTime + 15 days;
 	}
 
 	// Public interaction:
@@ -174,9 +174,6 @@ contract SecondPriceAuction {
 	/// Emergency function to drain the contract of any funds.
 	function drain() only_admin { require (treasury.send(this.balance)); }
 
-	/// Kill this contract once the sale is finished.
-	function kill() when_all_finalised { suicide(admin); }
-
 	// Inspection:
 
 	/// The current end time of the sale assuming that nobody else buys in.
@@ -246,9 +243,6 @@ contract SecondPriceAuction {
 	/// True if the sale is ongoing.
 	function isActive() constant returns (bool) { return now >= beginTime && now < endTime; }
 
-	/// True if all participants have finalised.
-	function allFinalised() constant returns (bool) { return now >= endTime && totalAccounted == totalFinalised; }
-
 	/// Returns true if the sender of this transaction is a basic account.
 	function isBasicAccount(address _who) internal returns (bool) {
 		uint senderCodeSize;
@@ -269,9 +263,6 @@ contract SecondPriceAuction {
 	/// Ensure we're not halted.
 	modifier when_not_halted { require (!halted); _; }
 
-	/// Ensure all participants have finalised.
-	modifier when_all_finalised { require (allFinalised()); _; }
-
 	/// Ensure the sender sent a sensible amount of ether.
 	modifier avoid_dust { require (msg.value >= DUST_LIMIT); _; }
 
@@ -289,10 +280,7 @@ contract SecondPriceAuction {
 
     /// Ensure sender has signed the contract.
 	modifier only_certified(address who) {
-		require (certifier.certified(who) || (
-			tx.gasprice <= 1000000000 &&
-			msg.value <= 100 finney
-		));
+		require (certifier.certified(who) && tx.gasprice <= 5000000000);
 		_;
 	}
 
@@ -362,7 +350,7 @@ contract SecondPriceAuction {
 	bytes32 constant public STATEMENT_HASH = sha3(STATEMENT);
 
 	/// The statement which should be signed.
-	string constant public STATEMENT = "\x19Ethereum Signed Message:\n47Please take my Ether and try to build Polkadot.";
+	string constant public STATEMENT = "\x19Ethereum Signed Message:\n47TODO: len(terms), terms";
 
 	//# Statement to actually sign.
 	//# ```js
@@ -376,8 +364,11 @@ contract SecondPriceAuction {
 	uint constant public BONUS_DURATION = 1 hours;
 
 	/// Number of Wei in one USD, constant.
-	uint constant public USDWEI = 1 ether / 200;
+	uint constant public USDWEI = 1 ether / 250;
 
 	/// Divisor of the token.
 	uint constant public DIVISOR = 1000;
+
+	// No default function, entry-level users
+	function() { assert(false); }
 }

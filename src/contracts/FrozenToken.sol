@@ -16,12 +16,12 @@ contract Token {
 	function allowance(address _owner, address _spender) constant returns (uint256 remaining);
 }
 
-// Owner-specific contract interface
+// From Owned.sol
 contract Owned {
 	event NewOwner(address indexed old, address indexed current);
 
 	modifier only_owner {
-		if (msg.sender != owner) throw;
+		require (msg.sender == owner);
 		_;
 	}
 
@@ -43,24 +43,24 @@ contract FrozenToken is Owned, Token {
 
 	// the balance should be available
 	modifier when_owns(address _owner, uint _amount) {
-		if (accounts[_owner].balance < _amount) throw;
+		require (accounts[_owner].balance >= _amount);
 		_;
 	}
 
 	// no ETH should be sent with the transaction
 	modifier when_no_eth {
-		if (msg.value > 0) throw;
+		require (msg.value == 0);
 		_;
 	}
 
 	modifier when_liquid(address who) {
-		if (!accounts[who].liquid) throw;
+		require (accounts[who].liquid);
 		_;
 	}
 
 	// a value should be > 0
 	modifier when_non_zero(uint _value) {
-		if (_value == 0) throw;
+		require (_value > 0);
 		_;
 	}
 
@@ -111,7 +111,5 @@ contract FrozenToken is Owned, Token {
 	}
 
 	// no default function, simple contract only, entry-level users
-	function() {
-		throw;
-	}
+	function() { assert(false); }
 }
