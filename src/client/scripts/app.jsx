@@ -406,8 +406,7 @@ export class App extends ReactiveComponent {
 		], (eraPeriod, tokenCap, usdWei, ticks, latestAccounted, latestEra, era) => {
 			let erasAccounted = [];
 			let erasCap = [];
-			if (ticks.length > 0) {
-				console.log('mapped', +eraPeriod, +usdWei, ticks, +ticks[ticks.length - 1].era, era);
+			console.log('mapped', +eraPeriod, +usdWei, ticks, ticks.length > 0 ? +ticks[ticks.length - 1].era : null, era);
 				let last = Math.max(era, latestEra);
 				for (let i = 0, j = 0; i <= last; ++i) {
 					if (i >= latestEra) {
@@ -419,12 +418,11 @@ export class App extends ReactiveComponent {
 						erasAccounted.push(+ticks[j].accounted);
 						j++;
 					}
-					let t = eraPeriod.mul(i);
-					erasCap.push(+tokenCap.div(1000).mul(usdWei.mul(18432000).div(t.add(5760)).sub(usdWei.mul(5))));
 				}
-			}
-			console.log('erasCap', erasCap);
 			console.log('erasAccounted', erasAccounted);
+			erasAccounted.unshift(0);
+			erasCap = erasAccounted.map((_, i) => erasCap.push(+tokenCap.div(1000).mul(usdWei.mul(18432000).div(eraPeriod.mul(i).add(5760)).sub(usdWei.mul(5)))));
+			console.log('erasCap', erasCap);
 			return {erasAccounted, erasCap};
 		});
 		window.ticks = ticks;
