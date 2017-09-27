@@ -2,12 +2,13 @@ var MultiCertifier = artifacts.require("MultiCertifier");
 var Token = artifacts.require("FrozenToken");
 var Auction = artifacts.require("SecondPriceAuction");
 
+const increaseTime = addSeconds => {
+	web3.currentProvider.send({jsonrpc: "2.0", method: "evm_increaseTime", params: [addSeconds], id: 0});
+	web3.currentProvider.send({jsonrpc: "2.0", method: "evm_mine", params: [], id: 1});
+}
+
 contract('auction', function(accounts) {
 	it("Constant time flow.", function() {
-		const increaseTime = addSeconds => {
-			web3.currentProvider.send({jsonrpc: "2.0", method: "evm_increaseTime", params: [addSeconds], id: 0});
-			web3.currentProvider.send({jsonrpc: "2.0", method: "evm_mine", params: [], id: 1});
-		}
 		var auction;
 		var tokenCap;
 		var endTime;
@@ -78,6 +79,18 @@ contract('auction', function(accounts) {
 			return auction.currentPrice.call();
 		}).then(function(earlyPrice) {
 			assert.equal(earlyPrice, 0, "Price is 0 after the sale.");
+		});
+	});
+	it("Admin.", function() {
+		const ADMIN = accounts[1];
+		const PARTICIPANT = accounts[5];
+		var auction;
+		return Auction.deployed().then(function(instance) {
+			auction = instance;
+			auction.inject(PARTICIPANT, 100, { from: ADMIN });
+			return auction.totalReceived.call()
+		}).then(function(received) {
+			assert.equal(received.toNumber(), 100, "Only 100 received.");
 		});
 	});
 });
