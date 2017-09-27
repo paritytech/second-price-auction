@@ -57,12 +57,14 @@ contract SecondPriceAuction {
 	/// Simple constructor.
 	/// Token cap should take be in whole tokens, not smallest divisible units.
 	function SecondPriceAuction(
+        address _certifierContract,
         address _tokenContract,
         address _treasury,
         address _admin,
         uint _beginTime,
         uint _tokenCap
     ) public {
+		certifier = Certifier(_certifierContract);
 		tokenContract = Token(_tokenContract);
 		treasury = _treasury;
 		admin = _admin;
@@ -110,8 +112,8 @@ contract SecondPriceAuction {
 	/// Like buyin except no payment required and bonus automatically given.
 	function inject(address _who, uint128 _received)
 		public
-	    only_admin
-	    only_basic(_who)
+		only_admin
+		only_basic(_who)
 	{
 		uint128 bonus = _received * uint128(BONUS_SIZE) / 100;
 		uint128 accounted = _received + bonus;
@@ -202,7 +204,7 @@ contract SecondPriceAuction {
 	/// Get the number of `tokens` that would be given if the sender were to
 	/// spend `_value` now. Also tell you what `refund` would be given, if any.
 	function theDeal(uint _value)
-        public
+		public
 		constant
 		returns (uint accounted, bool refund, uint price)
 	{
@@ -220,7 +222,7 @@ contract SecondPriceAuction {
 
 	/// Any applicable bonus to `_value`.
 	function bonus(uint _value)
-        public
+		public
 		constant
 		returns (uint extra)
 	{
@@ -314,7 +316,7 @@ contract SecondPriceAuction {
 	Token public tokenContract;
 
 	/// The certifier.
-	Certifier public certifier = Certifier(0x06C4AF12D9E3501C173b5D1B9dd9cF6DCC095b98);
+	Certifier public certifier;
 
 	/// The treasury address; where all the Ether goes.
 	address public treasury;
