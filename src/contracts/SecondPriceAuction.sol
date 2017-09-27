@@ -37,20 +37,8 @@ contract SecondPriceAuction {
 	/// Someone bought in at a particular max-price.
 	event Buyin(address indexed who, uint accounted, uint received, uint price);
 
-	/// Someone deposited in at a particular max-price.
-	event Deposited(address indexed who, uint accounted, uint received, uint price);
-
-	/// Someone moved their Ether out of the contract.
-	event DepositReturned(address indexed who, uint amount);
-
-	/// Someone moved their Ether out of the contract.
-	event DepositUsed(address indexed who, uint accounted, uint received);
-
 	/// Admin injected a purchase.
 	event Injected(address indexed who, uint accounted, uint received);
-
-	/// Admin injected a purchase.
-	event PrepayBuyin(address indexed who, uint accounted, uint received, uint price);
 
 	/// At least 20 blocks have passed.
 	event Ticked(uint era, uint received, uint accounted);
@@ -282,7 +270,7 @@ contract SecondPriceAuction {
 			ecrecover(STATEMENT_HASH, v, r, s) == who &&
 			certifier.certified(who) &&
 			isBasicAccount(who) &&
-			tx.gasprice <= 5000000000 &&
+			tx.gasprice <= MAX_GAS_PRICE &&
 			msg.value >= DUST_LIMIT
 		);
 		_;
@@ -326,7 +314,7 @@ contract SecondPriceAuction {
 	Token public tokenContract;
 
 	/// The certifier.
-	Certifier public certifier = Certifier(0xaEBd300d5Bc5f357cF35715C0169985484A70184);
+	Certifier public certifier = Certifier(0x06C4AF12D9E3501C173b5D1B9dd9cF6DCC095b98);
 
 	/// The treasury address; where all the Ether goes.
 	address public treasury;
@@ -352,6 +340,9 @@ contract SecondPriceAuction {
 
 	/// Anything less than this is considered dust and cannot be used to buy in.
 	uint constant public DUST_LIMIT = 5 finney;
+
+	/// The maximum gas price that may be provided for buyin transactions.
+	uint constant public MAX_GAS_PRICE = 5000000000;
 
 	/// The hash of the statement which must be signed in order to buyin.
 	bytes32 constant public STATEMENT_HASH = keccak256(STATEMENT);
