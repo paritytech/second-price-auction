@@ -91,6 +91,14 @@ contract('auction', function(accounts) {
 			return auction.totalReceived.call()
 		}).then(function(received) {
 			assert.equal(received.toNumber(), 100, "Only 100 received.");
+			auction.setHalted(true, { from: ADMIN});
+			return auction.halted.call();
+		}).then(function(halted) {
+			assert.isTrue(halted, "Admin should halt.");
+			auction.setHalted(false, { from: ADMIN});
+			return auction.halted.call();
+		}).then(function(halted) {
+			assert.isFalse(halted, "Admin should unhalt.");
 		});
 	});
 });
