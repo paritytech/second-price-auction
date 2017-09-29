@@ -103,6 +103,7 @@ contract SecondPriceAuction {
 		public
 		only_admin
 		only_basic(_who)
+		before_beginning
 	{
 		uint128 bonus = _received * uint128(BONUS_SIZE) / 100;
 		uint128 accounted = _received + bonus;
@@ -241,6 +242,9 @@ contract SecondPriceAuction {
 
 	/// Ensure the sale is ongoing.
 	modifier when_active { require (isActive()); _; }
+
+	/// Ensure the sale is ended.
+	modifier before_beginning { require (now < beginTime); _; }
 
 	/// Ensure the sale is ended.
 	modifier when_ended { require (now >= endTime); _; }
