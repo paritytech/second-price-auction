@@ -8,17 +8,6 @@ contract Token {
 	function transfer(address _to, uint256 _value) public returns (bool success);
 }
 
-// From Owned.sol
-contract Owned {
-	modifier only_owner { require (msg.sender == owner); _; }
-
-	event NewOwner(address indexed old, address indexed current);
-
-	function setOwner(address _new) public only_owner { NewOwner(owner, _new); owner = _new; }
-
-	address public owner = msg.sender;
-}
-
 // From Certifier.sol
 contract Certifier {
 	event Confirmed(address indexed who);

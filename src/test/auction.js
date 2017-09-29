@@ -1,5 +1,3 @@
-var MultiCertifier = artifacts.require("MultiCertifier");
-var Token = artifacts.require("FrozenToken");
 var Auction = artifacts.require("SecondPriceAuction");
 
 const increaseTime = addSeconds => {
@@ -87,10 +85,16 @@ contract('auction', function(accounts) {
 		var auction;
 		return Auction.deployed().then(function(instance) {
 			auction = instance;
+			return auction.inject(PARTICIPANT, 100, { from: PARTICIPANT });
+		}).then(assert.fail).catch(function(error) {
+			assert.include(error.message, 'invalid opcode', 'Participant can not inject.');
 			auction.inject(PARTICIPANT, 100, { from: ADMIN });
 			return auction.totalReceived.call()
 		}).then(function(received) {
 			assert.equal(received.toNumber(), 100, "Only 100 received.");
+			return auction.setHalted(true, { from: PARTICIPANT });
+		}).then(assert.fail).catch(function(error) {
+			assert.include(error.message, 'invalid opcode', 'Participant can not halt.');
 			auction.setHalted(true, { from: ADMIN});
 			return auction.halted.call();
 		}).then(function(halted) {
