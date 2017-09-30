@@ -8,17 +8,6 @@ contract Token {
 	function transfer(address _to, uint256 _value) public returns (bool success);
 }
 
-// From Owned.sol
-contract Owned {
-	modifier only_owner { require (msg.sender == owner); _; }
-
-	event NewOwner(address indexed old, address indexed current);
-
-	function setOwner(address _new) public only_owner { NewOwner(owner, _new); owner = _new; }
-
-	address public owner = msg.sender;
-}
-
 // From Certifier.sol
 contract Certifier {
 	event Confirmed(address indexed who);
@@ -57,12 +46,14 @@ contract SecondPriceAuction {
 	/// Simple constructor.
 	/// Token cap should take be in whole tokens, not smallest divisible units.
 	function SecondPriceAuction(
+        address _certifierContract,
         address _tokenContract,
         address _treasury,
         address _admin,
         uint _beginTime,
         uint _tokenCap
     ) public {
+		certifier = Certifier(_certifierContract);
 		tokenContract = Token(_tokenContract);
 		treasury = _treasury;
 		admin = _admin;
@@ -110,8 +101,9 @@ contract SecondPriceAuction {
 	/// Like buyin except no payment required and bonus automatically given.
 	function inject(address _who, uint128 _received)
 		public
-	    only_admin
-	    only_basic(_who)
+		only_admin
+		only_basic(_who)
+		before_beginning
 	{
 		uint128 bonus = _received * uint128(BONUS_SIZE) / 100;
 		uint128 accounted = _received + bonus;
@@ -202,7 +194,7 @@ contract SecondPriceAuction {
 	/// Get the number of `tokens` that would be given if the sender were to
 	/// spend `_value` now. Also tell you what `refund` would be given, if any.
 	function theDeal(uint _value)
-        public
+		public
 		constant
 		returns (uint accounted, bool refund, uint price)
 	{
@@ -220,7 +212,7 @@ contract SecondPriceAuction {
 
 	/// Any applicable bonus to `_value`.
 	function bonus(uint _value)
-        public
+		public
 		constant
 		returns (uint extra)
 	{
@@ -250,6 +242,9 @@ contract SecondPriceAuction {
 
 	/// Ensure the sale is ongoing.
 	modifier when_active { require (isActive()); _; }
+
+	/// Ensure the sale is ended.
+	modifier before_beginning { require (now < beginTime); _; }
 
 	/// Ensure the sale is ended.
 	modifier when_ended { require (now >= endTime); _; }
@@ -314,7 +309,7 @@ contract SecondPriceAuction {
 	Token public tokenContract;
 
 	/// The certifier.
-	Certifier public certifier = Certifier(0x06C4AF12D9E3501C173b5D1B9dd9cF6DCC095b98);
+	Certifier public certifier;
 
 	/// The treasury address; where all the Ether goes.
 	address public treasury;
