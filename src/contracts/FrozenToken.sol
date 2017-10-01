@@ -36,7 +36,7 @@ contract FrozenToken is Owned {
 
 	// constructor sets the parameters of execution, _totalSupply is all units
 	function FrozenToken(uint _totalSupply, address _owner)
-		when_non_zero(_totalSupply)
+		when_past_zero(_totalSupply)
 	{
 		totalSupply = _totalSupply;
 		owner = _owner;
@@ -85,7 +85,7 @@ contract FrozenToken is Owned {
 	}
 
 	// a value should be > 0
-	modifier when_non_zero(uint _value) {
+	modifier when_past_zero(uint _value) {
 		require (_value > 0);
 		_;
 	}
