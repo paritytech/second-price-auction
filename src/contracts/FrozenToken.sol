@@ -69,11 +69,6 @@ contract FrozenToken is Owned {
 		return true;
 	}
 
-	// no default function, simple contract only, entry-level users
-	function() public {
-		assert(false);
-	}
-
 	// the balance should be available
 	modifier when_owns(address _owner, uint _amount) {
 		require (accounts[_owner].balance >= _amount);
