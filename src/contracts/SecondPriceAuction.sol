@@ -45,13 +45,13 @@ contract SecondPriceAuction {
 	/// Simple constructor.
 	/// Token cap should take be in whole tokens, not smallest divisible units.
 	function SecondPriceAuction(
-        address _certifierContract,
-        address _tokenContract,
-        address _treasury,
-        address _admin,
-        uint _beginTime,
-        uint _tokenCap
-    ) public {
+    address _certifierContract,
+    address _tokenContract,
+    address _treasury,
+    address _admin,
+    uint _beginTime,
+    uint _tokenCap
+  ) {
 		certifier = Certifier(_certifierContract);
 		tokenContract = Token(_tokenContract);
 		treasury = _treasury;
