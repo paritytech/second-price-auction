@@ -3,7 +3,8 @@
 
 library safeMath {
   function mul(uint a, uint b) internal returns (uint) {
-    assert(a == 0 || (a * b) / a == b);
+    uint c = a * b;
+    assert(a == 0 || c / a == b);
     return c;
   }
 
@@ -18,7 +19,8 @@ library safeMath {
   }
 
   function add(uint a, uint b) internal returns (uint) {
-    assert((a + b) >= a);
+    uint c = a + b;
+    assert(c >= a);
     return c;
   }
 }

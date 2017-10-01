@@ -4,6 +4,8 @@
 
 pragma solidity ^0.4.17;
 
+import "./safeMath.sol";
+
 // From Owned.sol
 contract Owned {
 	modifier only_owner { require (msg.sender == owner); _; }
@@ -22,6 +24,8 @@ contract Owned {
 // Liquid accounts can make other accounts liquid and send their tokens
 // to other axccounts.
 contract FrozenToken is Owned {
+	using safeMath for uint;
+
 	event Transfer(address indexed from, address indexed to, uint value);
 
 	// this is as basic as can be, only the associated balance & liquidity
@@ -63,8 +67,8 @@ contract FrozenToken is Owned {
 		returns(bool)
 	{
 		Transfer(msg.sender, _to, _value);
-		accounts[msg.sender].balance -= _value;
-		accounts[_to].balance += _value;
+		accounts[msg.sender].balance = accounts[msg.sender].balance.sub(_value);
+		accounts[_to].balance = accounts[_to].balance.add(_value);
 
 		return true;
 	}
