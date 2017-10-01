@@ -3,6 +3,7 @@
 //! Released under the Apache Licence 2.
 
 pragma solidity ^0.4.17;
+
 // From Owned.sol
 contract Owned {
 	modifier only_owner { require (msg.sender == owner); _; }

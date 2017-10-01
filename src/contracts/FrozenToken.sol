@@ -32,7 +32,7 @@ contract FrozenToken is Owned {
 
 	// constructor sets the parameters of execution, _totalSupply is all units
 	function FrozenToken(uint _totalSupply, address _owner)
-        public
+    public
 		when_no_eth
 		when_non_zero(_totalSupply)
 	{

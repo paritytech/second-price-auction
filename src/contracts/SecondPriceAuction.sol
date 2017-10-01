@@ -3,6 +3,8 @@
 
 pragma solidity ^0.4.17;
 
+import "./safeMath.sol";
+
 /// Stripped down ERC20 standard token interface.
 contract Token {
 	function transfer(address _to, uint256 _value) public returns (bool success);
@@ -16,6 +18,8 @@ contract Certifier {
 /// Simple modified second price auction contract. Price starts high and monotonically decreases
 /// until all tokens are sold at the current price with currently received funds.
 contract SecondPriceAuction {
+	using safeMath for uint;
+
 	// Events:
 
 	/// Someone bought in at a particular max-price.
