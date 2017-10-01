@@ -43,7 +43,7 @@ contract SecondPriceAuction {
 	// Constructor:
 
 	/// Simple constructor.
-	/// Token cap should take be in whole tokens, not smallest divisible units.
+	/// Token cap should be in whole tokens, not smallest divisible units.
 	function SecondPriceAuction(
     address _certifierContract,
     address _tokenContract,
@@ -91,7 +91,7 @@ contract SecondPriceAuction {
 		Buyin(msg.sender, accounted, msg.value, price);
 
 		// send to treasury
-		require (treasury.send(msg.value));
+		assert (treasury.send(msg.value));
 	}
 
 	/// Like buyin except no payment required and bonus automatically given.
