@@ -22,9 +22,9 @@ contract Owned {
 // Liquid accounts can make other accounts liquid and send their tokens
 // to other axccounts.
 contract FrozenToken is Owned {
-	event Transfer(address indexed from, address indexed to, uint256 value);
+	event Transfer(address indexed from, address indexed to, uint value);
 
-	// this is as basic as can be, only the associated balance & allowances
+	// this is as basic as can be, only the associated balance & liquidity
 	struct Account {
 		uint balance;
 		bool liquid;
@@ -43,7 +43,7 @@ contract FrozenToken is Owned {
 	}
 
 	// balance of a specific address
-	function balanceOf(address _who) public constant returns (uint256) {
+	function balanceOf(address _who) public constant returns (uint) {
 		return accounts[_who].balance;
 	}
 
@@ -59,7 +59,7 @@ contract FrozenToken is Owned {
 	}
 
 	// transfer
-	function transfer(address _to, uint256 _value)
+	function transfer(address _to, uint _value)
 		public
 		when_no_eth
 		when_owns(msg.sender, _value)

@@ -7,7 +7,7 @@ import "./safeMath.sol";
 
 /// Stripped down ERC20 standard token interface.
 contract Token {
-	function transfer(address _to, uint256 _value) public returns (bool success);
+	function transfer(address _to, uint _value) public returns (bool success);
 }
 
 // From Certifier.sol
