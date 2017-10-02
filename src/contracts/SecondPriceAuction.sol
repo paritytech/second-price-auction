@@ -130,7 +130,7 @@ contract SecondPriceAuction {
 		uint tokens = total.div(endPrice);
 		totalFinalised = totalFinalised.add(total);
 		delete buyins[_who];
-		require (tokenContract.transfer(_who, tokens));
+		assert (tokenContract.transfer(_who, tokens));
 
 		Finalised(_who, tokens);
 
