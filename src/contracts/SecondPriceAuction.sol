@@ -3,24 +3,23 @@
 
 pragma solidity ^0.4.17;
 
+import "./safeMath.sol";
+
 /// Stripped down ERC20 standard token interface.
 contract Token {
-	function transfer(address _to, uint256 _value) public returns (bool success);
+	function transfer(address _to, uint _value) public returns (bool success);
 }
 
 // From Certifier.sol
 contract Certifier {
-	event Confirmed(address indexed who);
-	event Revoked(address indexed who);
 	function certified(address) public constant returns (bool);
-	function get(address, string) public constant returns (bytes32);
-	function getAddress(address, string) public constant returns (address);
-	function getUint(address, string) public constant returns (uint);
 }
 
 /// Simple modified second price auction contract. Price starts high and monotonically decreases
 /// until all tokens are sold at the current price with currently received funds.
 contract SecondPriceAuction {
+	using safeMath for uint;
+
 	// Events:
 
 	/// Someone bought in at a particular max-price.
@@ -44,26 +43,23 @@ contract SecondPriceAuction {
 	// Constructor:
 
 	/// Simple constructor.
-	/// Token cap should take be in whole tokens, not smallest divisible units.
+	/// Token cap should be in whole tokens, not smallest divisible units.
 	function SecondPriceAuction(
-        address _certifierContract,
-        address _tokenContract,
-        address _treasury,
-        address _admin,
-        uint _beginTime,
-        uint _tokenCap
-    ) public {
+    address _certifierContract,
+    address _tokenContract,
+    address _treasury,
+    address _admin,
+    uint _beginTime,
+    uint _tokenCap
+  ) {
 		certifier = Certifier(_certifierContract);
 		tokenContract = Token(_tokenContract);
 		treasury = _treasury;
 		admin = _admin;
 		beginTime = _beginTime;
 		tokenCap = _tokenCap;
-		endTime = beginTime + 15 days;
+		endTime = beginTime.add(15 days);
 	}
-
-	// No default function, entry-level users
-	function() public { assert(false); }
 
 	// Public interaction:
 
@@ -87,31 +83,31 @@ contract SecondPriceAuction {
 		require (!refund);
 
 		// record the acceptance.
-		buyins[msg.sender].accounted += uint128(accounted);
-		buyins[msg.sender].received += uint128(msg.value);
-		totalAccounted += accounted;
-		totalReceived += msg.value;
+		buyins[msg.sender].accounted = buyins[msg.sender].accounted.add(accounted);
+		buyins[msg.sender].received = buyins[msg.sender].received.add(msg.value);
+		totalAccounted = totalAccounted.add(accounted);
+		totalReceived = totalReceived.add(msg.value);
 		endTime = calculateEndTime();
 		Buyin(msg.sender, accounted, msg.value, price);
 
 		// send to treasury
-		require (treasury.send(msg.value));
+		assert (treasury.send(msg.value));
 	}
 
 	/// Like buyin except no payment required and bonus automatically given.
-	function inject(address _who, uint128 _received)
+	function inject(address _who, uint _received)
 		public
 		only_admin
 		only_basic(_who)
 		before_beginning
 	{
-		uint128 bonus = _received * uint128(BONUS_SIZE) / 100;
-		uint128 accounted = _received + bonus;
+		uint bonus = _received.mul(BONUS_SIZE).div(100);
+		uint accounted = _received.add(bonus);
 
-		buyins[_who].accounted += accounted;
-		buyins[_who].received += _received;
-		totalAccounted += accounted;
-		totalReceived += _received;
+		buyins[_who].accounted = buyins[_who].accounted.add(accounted);
+		buyins[_who].received = buyins[_who].received.add(_received);
+		totalAccounted = totalAccounted.add(accounted);
+		totalReceived = totalReceived.add(_received);
 		endTime = calculateEndTime();
 		Injected(_who, accounted, _received);
 	}
@@ -125,16 +121,16 @@ contract SecondPriceAuction {
 	{
 		// end the auction if we're the first one to finalise.
 		if (endPrice == 0) {
-			endPrice = totalAccounted / tokenCap;
+			endPrice = totalAccounted.div(tokenCap);
 			Ended(endPrice);
 		}
 
 		// enact the purchase.
 		uint total = buyins[_who].accounted;
-		uint tokens = total / endPrice;
-		totalFinalised += total;
+		uint tokens = total.div(endPrice);
+		totalFinalised = totalFinalised.add(total);
 		delete buyins[_who];
-		require (tokenContract.transfer(_who, tokens));
+		assert (tokenContract.transfer(_who, tokens));
 
 		Finalised(_who, tokens);
 
@@ -147,7 +143,7 @@ contract SecondPriceAuction {
 
 	/// Ensure the era tracker is prepared in case the current changed.
 	function flushEra() private {
-		uint currentEra = (now - beginTime) / ERA_PERIOD;
+		uint currentEra = uint(now).sub(beginTime).div(ERA_PERIOD);
 		if (currentEra > eraIndex) {
 			Ticked(eraIndex, totalReceived, totalAccounted);
 		}
@@ -160,14 +156,24 @@ contract SecondPriceAuction {
 	function setHalted(bool _halted) public only_admin { halted = _halted; }
 
 	/// Emergency function to drain the contract of any funds.
-	function drain() public only_admin { require (treasury.send(this.balance)); }
+	function drain() public only_admin { assert (treasury.send(this.balance)); }
 
 	// Inspection:
 
 	/// The current end time of the sale assuming that nobody else buys in.
 	function calculateEndTime() public constant returns (uint) {
-		var factor = tokenCap / DIVISOR * USDWEI;
-		return beginTime + 18432000 * factor / (totalAccounted + 5 * factor) - 5760;
+		var factor = tokenCap.div(DIVISOR).mul(USDWEI);
+		return beginTime
+			.add(
+				uint(18432000).mul(factor)
+				.div(
+					totalAccounted
+					.add(
+						uint(5).mul(factor)
+					)
+				)
+			)
+			.sub(5760);
 	}
 
 	/// The current price for a single indivisible part of a token. If a buyin happens now, this is
@@ -175,20 +181,28 @@ contract SecondPriceAuction {
 	/// include the discount which may be available.
 	function currentPrice() public constant returns (uint weiPerIndivisibleTokenPart) {
 		if (!isActive()) return 0;
-		return (USDWEI * 18432000 / (now - beginTime + 5760) - USDWEI * 5) / DIVISOR;
+		return USDWEI
+			.mul(18432000)
+			.div(
+				uint(now).sub(beginTime).add(5760)
+			)
+			.sub(
+				USDWEI.mul(5)
+			)
+			.div(DIVISOR);
 	}
 
 	/// Returns the total indivisible token parts available for purchase right now.
 	function tokensAvailable() public constant returns (uint tokens) {
 		if (!isActive()) return 0;
-		return tokenCap - totalAccounted / currentPrice();
+		return tokenCap.sub(totalAccounted).div(currentPrice());
 	}
 
 	/// The largest purchase than can be made at present, not including any
 	/// discount.
 	function maxPurchase() public constant returns (uint spend) {
 		if (!isActive()) return 0;
-		return tokenCap * currentPrice() - totalAccounted;
+		return tokenCap.mul(currentPrice()).sub(totalAccounted);
 	}
 
 	/// Get the number of `tokens` that would be given if the sender were to
@@ -203,10 +217,10 @@ contract SecondPriceAuction {
 		uint bonus = this.bonus(_value);
 
 		price = currentPrice();
-		accounted = _value + bonus;
+		accounted = _value.add(bonus);
 
 		uint available = tokensAvailable();
-		uint tokens = accounted / price;
+		uint tokens = accounted.div(price);
 		refund = (tokens > available);
 	}
 
@@ -217,8 +231,8 @@ contract SecondPriceAuction {
 		returns (uint extra)
 	{
 		if (!isActive()) return 0;
-		if (now < beginTime + BONUS_DURATION) {
-			return _value * BONUS_SIZE / 100;
+		if (now < beginTime.add(BONUS_DURATION)) {
+			return _value.mul(BONUS_SIZE).div(100);
 		}
 		return 0;
 	}
@@ -277,8 +291,8 @@ contract SecondPriceAuction {
 	// State:
 
 	struct Account {
-		uint128 accounted;	// including bonus & hit
-		uint128 received;	// just the amount received, without bonus & hit
+		uint accounted;	// including bonus & hit
+		uint received;	// just the amount received, without bonus & hit
 	}
 
 	/// Those who have bought in to the auction.

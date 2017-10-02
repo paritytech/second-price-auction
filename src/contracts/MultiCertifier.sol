@@ -2,7 +2,7 @@
 //! By Parity Technologies, 2017.
 //! Released under the Apache Licence 2.
 
-pragma solidity ^0.4.16;
+pragma solidity ^0.4.17;
 
 // From Owned.sol
 contract Owned {
@@ -17,12 +17,7 @@ contract Owned {
 
 // From Certifier.sol
 contract Certifier {
-	event Confirmed(address indexed who);
-	event Revoked(address indexed who);
 	function certified(address) constant returns (bool);
-	function get(address, string) constant returns (bytes32) {}
-	function getAddress(address, string) constant returns (address) {}
-	function getUint(address, string) constant returns (uint) {}
 }
 
 /**

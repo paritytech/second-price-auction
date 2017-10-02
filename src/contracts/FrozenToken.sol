@@ -4,6 +4,8 @@
 
 pragma solidity ^0.4.17;
 
+import "./safeMath.sol";
+
 // From Owned.sol
 contract Owned {
 	modifier only_owner { require (msg.sender == owner); _; }
@@ -22,9 +24,11 @@ contract Owned {
 // Liquid accounts can make other accounts liquid and send their tokens
 // to other axccounts.
 contract FrozenToken is Owned {
-	event Transfer(address indexed from, address indexed to, uint256 value);
+	using safeMath for uint;
 
-	// this is as basic as can be, only the associated balance & allowances
+	event Transfer(address indexed from, address indexed to, uint value);
+
+	// this is as basic as can be, only the associated balance & liquidity
 	struct Account {
 		uint balance;
 		bool liquid;
@@ -32,9 +36,7 @@ contract FrozenToken is Owned {
 
 	// constructor sets the parameters of execution, _totalSupply is all units
 	function FrozenToken(uint _totalSupply, address _owner)
-        public
-		when_no_eth
-		when_non_zero(_totalSupply)
+		when_past_zero(_totalSupply)
 	{
 		totalSupply = _totalSupply;
 		owner = _owner;
@@ -43,14 +45,13 @@ contract FrozenToken is Owned {
 	}
 
 	// balance of a specific address
-	function balanceOf(address _who) public constant returns (uint256) {
+	function balanceOf(address _who) public constant returns (uint) {
 		return accounts[_who].balance;
 	}
 
 	// make an account liquid: only liquid accounts can do this.
 	function makeLiquid(address _to)
 		public
-		when_no_eth
 		when_liquid(msg.sender)
 		returns(bool)
 	{
@@ -59,34 +60,22 @@ contract FrozenToken is Owned {
 	}
 
 	// transfer
-	function transfer(address _to, uint256 _value)
+	function transfer(address _to, uint _value)
 		public
-		when_no_eth
 		when_owns(msg.sender, _value)
 		when_liquid(msg.sender)
 		returns(bool)
 	{
 		Transfer(msg.sender, _to, _value);
-		accounts[msg.sender].balance -= _value;
-		accounts[_to].balance += _value;
+		accounts[msg.sender].balance = accounts[msg.sender].balance.sub(_value);
+		accounts[_to].balance = accounts[_to].balance.add(_value);
 
 		return true;
-	}
-
-	// no default function, simple contract only, entry-level users
-	function() public {
-		assert(false);
 	}
 
 	// the balance should be available
 	modifier when_owns(address _owner, uint _amount) {
 		require (accounts[_owner].balance >= _amount);
-		_;
-	}
-
-	// no ETH should be sent with the transaction
-	modifier when_no_eth {
-		require (msg.value == 0);
 		_;
 	}
 
@@ -96,7 +85,7 @@ contract FrozenToken is Owned {
 	}
 
 	// a value should be > 0
-	modifier when_non_zero(uint _value) {
+	modifier when_past_zero(uint _value) {
 		require (_value > 0);
 		_;
 	}
