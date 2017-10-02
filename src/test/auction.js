@@ -89,9 +89,16 @@ contract('auction', function(accounts) {
 		}).then(assert.fail).catch(function(error) {
 			assert.include(error.message, 'invalid opcode', 'Participant can not inject.');
 			auction.inject(PARTICIPANT, 100, { from: ADMIN });
+			return auction.beginTime.call();
+		}).then(function(begin) {
+			assert.isAbove(begin.toNumber(), web3.eth.getBlock(web3.eth.blockNumber).timestamp);
 			return auction.totalReceived.call()
 		}).then(function(received) {
-			assert.equal(received.toNumber(), 100, "Only 100 received.");
+			assert.equal(received.toNumber(), 100, "All received.");
+			increaseTime(1000);
+			return auction.inject(PARTICIPANT, 100, { from: ADMIN });
+		}).then(assert.fail).catch(function(error) {
+			assert.include(error.message, 'invalid opcode', 'Admin can not inject when begun.');
 			return auction.setHalted(true, { from: PARTICIPANT });
 		}).then(assert.fail).catch(function(error) {
 			assert.include(error.message, 'invalid opcode', 'Participant can not halt.');

@@ -243,7 +243,7 @@ contract SecondPriceAuction {
 	/// Ensure the sale is ongoing.
 	modifier when_active { require (isActive()); _; }
 
-	/// Ensure the sale is ended.
+	/// Ensure the sale has not begun.
 	modifier before_beginning { require (now < beginTime); _; }
 
 	/// Ensure the sale is ended.
