@@ -31,7 +31,7 @@ contract SecondPriceAuction {
 	/// Admin injected a purchase.
 	event Injected(address indexed who, uint accounted, uint received);
 
-	/// At least 20 blocks have passed.
+	/// At least 5 minutes has passed since last Ticked event.
 	event Ticked(uint era, uint received, uint accounted);
 
 	/// The sale just ended with the current price.
