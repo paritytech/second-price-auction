@@ -4,7 +4,7 @@
 
 pragma solidity ^0.4.17;
 
-// From Owned.sol
+// Owned contract.
 contract Owned {
 	modifier only_owner { require (msg.sender == owner); _; }
 
@@ -12,7 +12,7 @@ contract Owned {
 
 	function setOwner(address _new) public only_owner { NewOwner(owner, _new); owner = _new; }
 
-	address public owner = msg.sender;
+	address public owner;
 }
 
 // FrozenToken, a bit like an ECR20 token (though not - as it doesn't

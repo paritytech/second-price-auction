@@ -95,7 +95,7 @@ contract SecondPriceAuction {
 		Buyin(msg.sender, accounted, msg.value, price);
 
 		// send to treasury
-		require (treasury.send(msg.value));
+		treasury.transfer(msg.value);
 	}
 
 	/// Like buyin except no payment required and bonus automatically given.
@@ -160,7 +160,7 @@ contract SecondPriceAuction {
 	function setHalted(bool _halted) public only_admin { halted = _halted; }
 
 	/// Emergency function to drain the contract of any funds.
-	function drain() public only_admin { require (treasury.send(this.balance)); }
+	function drain() public only_admin { treasury.transfer(this.balance); }
 
 	// Inspection:
 
@@ -200,10 +200,10 @@ contract SecondPriceAuction {
 	{
 		if (!isActive()) return;
 
-		uint bonus = this.bonus(_value);
+		uint _bonus = bonus(_value);
 
 		price = currentPrice();
-		accounted = _value + bonus;
+		accounted = _value + _bonus;
 
 		uint available = tokensAvailable();
 		uint tokens = accounted / price;
