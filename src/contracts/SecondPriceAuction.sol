@@ -48,13 +48,15 @@ contract SecondPriceAuction {
 	/// Simple constructor.
 	/// Token cap should take be in whole tokens, not smallest divisible units.
 	function SecondPriceAuction(
-        address _certifierContract,
-        address _tokenContract,
-        address _treasury,
-        address _admin,
-        uint _beginTime,
-        uint _tokenCap
-    ) public {
+		address _certifierContract,
+		address _tokenContract,
+		address _treasury,
+		address _admin,
+		uint _beginTime,
+		uint _tokenCap
+	)
+		public
+	{
 		certifier = Certifier(_certifierContract);
 		tokenContract = Token(_tokenContract);
 		treasury = _treasury;
@@ -267,7 +269,7 @@ contract SecondPriceAuction {
 			ecrecover(STATEMENT_HASH, v, r, s) == who &&
 			certifier.certified(who) &&
 			isBasicAccount(who) &&
-			tx.gasprice <= MAX_GAS_PRICE &&
+			(tx.gasprice <= MAX_GAS_PRICE || now < beginTime + BONUS_DURATION) &&
 			msg.value >= DUST_LIMIT
 		);
 		_;
