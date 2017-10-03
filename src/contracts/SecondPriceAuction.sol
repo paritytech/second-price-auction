@@ -20,6 +20,8 @@ contract Certifier {
 
 /// Simple modified second price auction contract. Price starts high and monotonically decreases
 /// until all tokens are sold at the current price with currently received funds.
+/// The price curve has been chosen to resemble a logarithmic curve
+/// and produce a reasonable auction timeline.
 contract SecondPriceAuction {
 	// Events:
 
@@ -95,7 +97,7 @@ contract SecondPriceAuction {
 		Buyin(msg.sender, accounted, msg.value, price);
 
 		// send to treasury
-		require (treasury.send(msg.value));
+		treasury.transfer(msg.value);
 	}
 
 	/// Like buyin except no payment required and bonus automatically given.
@@ -160,7 +162,7 @@ contract SecondPriceAuction {
 	function setHalted(bool _halted) public only_admin { halted = _halted; }
 
 	/// Emergency function to drain the contract of any funds.
-	function drain() public only_admin { require (treasury.send(this.balance)); }
+	function drain() public only_admin { treasury.transfer(this.balance); }
 
 	// Inspection:
 
@@ -200,10 +202,10 @@ contract SecondPriceAuction {
 	{
 		if (!isActive()) return;
 
-		uint bonus = this.bonus(_value);
+		uint _bonus = bonus(_value);
 
 		price = currentPrice();
-		accounted = _value + bonus;
+		accounted = _value + _bonus;
 
 		uint available = tokensAvailable();
 		uint tokens = accounted / price;
@@ -243,7 +245,7 @@ contract SecondPriceAuction {
 	/// Ensure the sale is ongoing.
 	modifier when_active { require (isActive()); _; }
 
-	/// Ensure the sale is ended.
+	/// Ensure the sale has not begun.
 	modifier before_beginning { require (now < beginTime); _; }
 
 	/// Ensure the sale is ended.
