@@ -1,11 +1,96 @@
+@font-face {
+    font-family: "Lobster";
+    src: url("Lobster-Regular.ttf");
+}
+@font-face {
+    font-family: "Abel";
+    src: url("Abel-Regular.ttf");
+}
+@font-face {
+    font-family: "Din";
+    src: url("Din-Medium.ttf");
+}
+@font-face {
+    font-family: "Din-Light";
+    src: url("Din-Light.ttf");
+}
+@font-face {
+    font-family: "Din-Black";
+    src: url("Din-Black.ttf");
+}
+
+._fieldTitle {
+    font-family: 'Lobster';
+    font-size: 12pt;
+}
+
+canvas {
+    padding: 0.5em;
+}
+
+div#canvas-holder {
+    position: absolute;
+    z-index: -1;
+}
+
+div#canvas-holder canvas {
+    padding: 0;
+}
+
 body {
   margin: 0;
-  font-family: Roboto, sans-serif;
+  padding: 0;
+  font-family: Din-Medium, Roboto, sans-serif;
+}
+
+#countdown-hero {
+    text-align: center;
+    line-height: normal;
+}
+
+#countdown-timer {
+    font-family: Abel;
+    text-align: center;
+    margin: auto;
+    position: relative;
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    width: 100vw;
+    padding: 20px 0;
+    padding-top: 0;
+    cursor: default;
+}
+
+.countdown-timer-title {
+    color: #d64ca8;
+    font-family: Din-Black;
+    padding-bottom: 15px;
+    font-size: 14px;
+}
+
+.countdown-timer-element {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 70px;
+    font-family: Abel;
+    border: 1px #d64ca8 solid;
+    border-radius: 100%;
+    width: 110px;
+    height: 110px;
+    background-color: white;
+}
+
+.countdown-spacer {
+    padding: 0 7px;
+    padding-top: 25px;
+    font-size: 55px;
 }
 
 .site {
   display: flex;
-  min-height: 100vh;
+  min-height: 540px;
   flex-direction: column;
 }
 
@@ -42,7 +127,8 @@ footer h1 {
 }
 
 .contrib-hero {
-  background: linear-gradient(to bottom, #3f4c6b 0%,#222a44 100%);
+/*  background: linear-gradient(to bottom, #3f4c6b 0%,#222a44 100%);*/
+  background: rgba(255, 255, 255, 0.94);
   background-repeat: no-repeat;
   background-size: cover;
   background-position: 50% 50%;
@@ -77,7 +163,7 @@ div#action {
 
 .row {
 /*  line-height: 96px;*/
-  color: #bbb;
+  color: #666;
 }
 
 .page-footer {
@@ -85,17 +171,45 @@ div#action {
   padding: 40px 0;
 }
 
-div.status-rest {
+span#logo {
+  line-height: 54px;
+}
+
+#logo-text {
+  font-size: 64px;
+  font-family: Lobster;
+  color: white;
+  vertical-align: middle;
+}
+
+div#status-title, div#status-title > h1  {
+  color: #555;
+  text-shadow: 0 0 10px rgba(255, 255, 255, 0.5);
+  text-align: center;
+}
+
+div#status-title {
+  flex: 1 1 auto;
+  font-size: 20px;
+}
+
+div#status-title > h1 {
+  font-size: 36px;
+  font-weight: 400;
+  margin-bottom: 15px;
+}
+
+div#status-rest {
   flex: 1 1 auto;
 }
 
-div.status-rest > div {
-  margin-top: 30px;
+div#status-rest > div {
+  margin-top: 1.5em;
   display: flex;
   flex-direction: row;
 }
 
-div.status-rest > div > .title {
+div#status-rest > div > .title {
   text-transform: uppercase;
   border-right: 1px rgba(255, 255, 255, 0.2) solid;
   margin-right: 3em;
@@ -104,35 +218,11 @@ div.status-rest > div > .title {
   text-align: right;
 }
 
-div.status-rest > div > .field {
+div#status-rest > div > .field {
   margin-top: 0px;
   flex: 1 1 auto;
   display: flex;
   flex-direction: column;
-}
-
-span#logo {
-  font-size: 16px;
-  font-family: Roboto, sans-serif;
-  text-shadow: 0px 1px 2px black;
-  color: white;
-  line-height: 52px;
-}
-
-div#status-title {
-  color: white;
-  flex: 1 1 auto;
-  text-align: center;
-  text-shadow: 0 1px 1px black;
-  font-size: 20px;
-  margin-top: -24px;
-}
-
-div#status-title > h1 {
-  font-size: 36px;
-  font-weight: 400;
-  text-shadow: 0 1px 2px black;
-  margin-bottom: 15px;
 }
 
 div#contributionPanel {
@@ -149,6 +239,10 @@ div#contributionPanel {
 div#contributionPanel > * {
 	flex: 1 1 auto;
 	margin-bottom: 2em;
+}
+
+.contrib-main {
+    background: white;
 }
 
 .contrib-main section {
@@ -211,16 +305,16 @@ section.bonus-main {
 	font-weight: bold;
 }
 ._fieldValue._basic {
-	color: #ddd;
+	color: #444;
 }
 ._fieldValue._active {
-	color: #8f8;
+	color: #363;
 }
 ._fieldValue._before {
-	color: #aa8;
+	color: #663;
 }
 ._fieldValue._after {
-	color: #88f;
+	color: #336;
 }
 
 @media (min-width: 1200px)

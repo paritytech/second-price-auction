@@ -1,8 +1,8 @@
 {
-	"id": "second-price-auction",
-	"name": "Whitelabel Auction",
-	"description": "The Whitelabel Modified Second Price Auction",
+	"id": "polkadot-auction",
+	"name": "Polkadot Auction",
+	"description": "The Polkadot Auction Ðapp",
 	"version": "0.1",
-	"author": "Parity Technologies",
+	"author": "The Polka King",
 	"iconUrl": "title.png"
 }
