@@ -177,21 +177,18 @@ contract SecondPriceAuction {
 	/// The current price for a single indivisible part of a token. If a buyin happens now, this is
 	/// the highest price per indivisible token part that the buyer will pay. This doesn't
 	/// include the discount which may be available.
-	function currentPrice() public constant returns (uint weiPerIndivisibleTokenPart) {
-		if (!isActive()) return 0;
+	function currentPrice() public constant when_active returns (uint weiPerIndivisibleTokenPart) {
 		return (USDWEI * 18432000 / (now - beginTime + 5760) - USDWEI * 5) / DIVISOR;
 	}
 
 	/// Returns the total indivisible token parts available for purchase right now.
-	function tokensAvailable() public constant returns (uint tokens) {
-		if (!isActive()) return 0;
+	function tokensAvailable() public constant when_active returns (uint tokens) {
 		return tokenCap - totalAccounted / currentPrice();
 	}
 
 	/// The largest purchase than can be made at present, not including any
 	/// discount.
-	function maxPurchase() public constant returns (uint spend) {
-		if (!isActive()) return 0;
+	function maxPurchase() public constant when_active returns (uint spend) {
 		return tokenCap * currentPrice() - totalAccounted;
 	}
 
@@ -200,10 +197,9 @@ contract SecondPriceAuction {
 	function theDeal(uint _value)
 		public
 		constant
+		when_active
 		returns (uint accounted, bool refund, uint price)
 	{
-		if (!isActive()) return;
-
 		uint _bonus = bonus(_value);
 
 		price = currentPrice();
@@ -218,9 +214,9 @@ contract SecondPriceAuction {
 	function bonus(uint _value)
 		public
 		constant
+		when_active
 		returns (uint extra)
 	{
-		if (!isActive()) return 0;
 		if (now < beginTime + BONUS_DURATION) {
 			return _value * BONUS_SIZE / 100;
 		}
