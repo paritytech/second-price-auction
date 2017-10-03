@@ -70,4 +70,9 @@ contract MultiCertifier is Owned, Certifier {
 
 	mapping (address => Certification) certs;
 	mapping (address => bool) delegates;
+
+	/// Unused interface methods.
+	function get(address, string) public constant returns (bytes32) {}
+	function getAddress(address, string) public constant returns (address) {}
+	function getUint(address, string) public constant returns (uint) {}
 }
