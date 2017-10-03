@@ -116,7 +116,7 @@ contract SecondPriceAuction {
 		totalAccounted += accounted;
 		totalReceived += _received;
 		endTime = calculateEndTime();
-		Injected(_who, accounted, _received)
+		Injected(_who, accounted, _received);
 	}
 
 	/// Mint tokens for a particular participant.
@@ -264,7 +264,7 @@ contract SecondPriceAuction {
 			ecrecover(STATEMENT_HASH, v, r, s) == who &&
 			certifier.certified(who) &&
 			isBasicAccount(who) &&
-			(tx.gasprice <= MAX_GAS_PRICE || now < beginTime + BONUS_DURATION) &&
+			(tx.gasprice <= MAX_GAS_PRICE || now > beginTime + BONUS_DURATION) &&
 			msg.value >= DUST_LIMIT
 		);
 		_;
