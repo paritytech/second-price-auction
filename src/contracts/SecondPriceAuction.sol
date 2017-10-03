@@ -71,8 +71,7 @@ contract SecondPriceAuction {
 
 	// Public interaction:
 
-	/// Buyin function. Throws if the sale is not active. May refund some of the
-	/// funds if they would end the sale.
+	/// Buyin function. Throws if the sale is not active and when refund would be needed.
 	function buyin(uint8 v, bytes32 r, bytes32 s)
 		public
 		payable
@@ -117,7 +116,7 @@ contract SecondPriceAuction {
 		totalAccounted += accounted;
 		totalReceived += _received;
 		endTime = calculateEndTime();
-		Injected(_who, accounted, _received);
+		Injected(_who, accounted, _received)
 	}
 
 	/// Mint tokens for a particular participant.
