@@ -182,7 +182,11 @@ contract SecondPriceAuction {
 
 	/// Returns the total indivisible token parts available for purchase right now.
 	function tokensAvailable() public constant when_active returns (uint tokens) {
-		return tokenCap - totalAccounted / currentPrice();
+		uint _currentCap = totalAccounted / currentPrice();
+		if (_currentCap >= tokenCap) {
+			return 0;
+		}
+		return tokenCap - _currentCap;
 	}
 
 	/// The largest purchase than can be made at present, not including any
