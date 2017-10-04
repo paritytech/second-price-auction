@@ -170,14 +170,14 @@ contract SecondPriceAuction {
 	/// The current end time of the sale assuming that nobody else buys in.
 	function calculateEndTime() public constant returns (uint) {
 		var factor = tokenCap / DIVISOR * USDWEI;
-		return beginTime + 18432000 * factor / (totalAccounted + 5 * factor) - 5760;
+		return beginTime + 40000000 * factor / (totalAccounted + 5 * factor) - 5760;
 	}
 
 	/// The current price for a single indivisible part of a token. If a buyin happens now, this is
 	/// the highest price per indivisible token part that the buyer will pay. This doesn't
 	/// include the discount which may be available.
 	function currentPrice() public constant when_active returns (uint weiPerIndivisibleTokenPart) {
-		return (USDWEI * 18432000 / (now - beginTime + 5760) - USDWEI * 5) / DIVISOR;
+		return (USDWEI * 40000000 / (now - beginTime + 5760) - USDWEI * 5) / DIVISOR;
 	}
 
 	/// Returns the total indivisible token parts available for purchase right now.
