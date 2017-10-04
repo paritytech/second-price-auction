@@ -428,11 +428,12 @@ class CountdownHero extends ReactiveComponent {
 		});
 	}
 	readyRender () {
+		let twoDigit = n => n < 10 ? '0' + n : n;
 		let eta = this.state.eta;
-		let days = Math.floor(eta / 24 / 3600);
-		let hours = Math.floor(eta / 3600) % 24;
-		let minutes = Math.floor(eta / 60) % 60;
-		let seconds = Math.floor(eta) % 60;
+		let days = twoDigit(Math.floor(eta / 24 / 3600));
+		let hours = twoDigit(Math.floor(eta / 3600) % 24);
+		let minutes = twoDigit(Math.floor(eta / 60) % 60);
+		let seconds = twoDigit(Math.floor(eta) % 60);
 		return (<div id='countdown-hero'>
 			<div id='countdown-timer'>
 				<div>
@@ -543,7 +544,7 @@ export class App extends ReactiveComponent {
 				<AccountIcon address={DutchAuction().address} id='logoIcon' style={{float: 'right', width: '3em', boxShadow: '0px 2px 30px 0px rgba(0, 0, 0, 0.5)'}}/>
 				<div className='row'>
 				  <h1>The Polkadot Auction Ðapp.</h1>
-				  Made with &lt;3 by Some Guy, adapted from a Ðapp by Parity Technologies, 2017.
+				  Made with &lt;3 by Some Random Guys, adapted from a Ðapp by Parity Technologies, 2017.
 				</div>
 			  </div>
 			</footer>
