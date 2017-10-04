@@ -4,7 +4,7 @@
 
 pragma solidity ^0.4.17;
 
-// From Owned.sol
+// Owned contract.
 contract Owned {
 	modifier only_owner { require (msg.sender == owner); _; }
 
@@ -12,7 +12,7 @@ contract Owned {
 
 	function setOwner(address _new) public only_owner { NewOwner(owner, _new); owner = _new; }
 
-	address public owner = msg.sender;
+	address public owner;
 }
 
 // FrozenToken, a bit like an ECR20 token (though not - as it doesn't
@@ -33,7 +33,6 @@ contract FrozenToken is Owned {
 	// constructor sets the parameters of execution, _totalSupply is all units
 	function FrozenToken(uint _totalSupply, address _owner)
         public
-		when_no_eth
 		when_non_zero(_totalSupply)
 	{
 		totalSupply = _totalSupply;
@@ -50,7 +49,6 @@ contract FrozenToken is Owned {
 	// make an account liquid: only liquid accounts can do this.
 	function makeLiquid(address _to)
 		public
-		when_no_eth
 		when_liquid(msg.sender)
 		returns(bool)
 	{
@@ -61,7 +59,6 @@ contract FrozenToken is Owned {
 	// transfer
 	function transfer(address _to, uint256 _value)
 		public
-		when_no_eth
 		when_owns(msg.sender, _value)
 		when_liquid(msg.sender)
 		returns(bool)
@@ -81,12 +78,6 @@ contract FrozenToken is Owned {
 	// the balance should be available
 	modifier when_owns(address _owner, uint _amount) {
 		require (accounts[_owner].balance >= _amount);
-		_;
-	}
-
-	// no ETH should be sent with the transaction
-	modifier when_no_eth {
-		require (msg.value == 0);
 		_;
 	}
 

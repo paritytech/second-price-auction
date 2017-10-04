@@ -10,7 +10,7 @@ contract Owned {
 
 	event NewOwner(address indexed old, address indexed current);
 
-	function setOwner(address _new) only_owner { NewOwner(owner, _new); owner = _new; }
+	function setOwner(address _new) public only_owner { NewOwner(owner, _new); owner = _new; }
 
 	address public owner = msg.sender;
 }
@@ -19,10 +19,10 @@ contract Owned {
 contract Certifier {
 	event Confirmed(address indexed who);
 	event Revoked(address indexed who);
-	function certified(address) constant returns (bool);
-	function get(address, string) constant returns (bytes32) {}
-	function getAddress(address, string) constant returns (address) {}
-	function getUint(address, string) constant returns (uint) {}
+	function certified(address) public constant returns (bool);
+	function get(address, string) public constant returns (bytes32);
+	function getAddress(address, string) public constant returns (address);
+	function getUint(address, string) public constant returns (uint);
 }
 
 /**
@@ -45,6 +45,7 @@ contract MultiCertifier is Owned, Certifier {
 	}
 
 	function certify(address _who)
+		public
 		only_delegate
 		only_uncertified(_who)
 	{
@@ -54,6 +55,7 @@ contract MultiCertifier is Owned, Certifier {
 	}
 
 	function revoke(address _who)
+		public
 		only_certifier_of(_who)
 		only_certified(_who)
 	{
@@ -61,11 +63,16 @@ contract MultiCertifier is Owned, Certifier {
 		Revoked(_who, msg.sender);
 	}
 
-	function certified(address _who) constant returns (bool) { return certs[_who].active; }
-	function getCertifier(address _who) constant returns (address) { return certs[_who].certifier; }
-	function addDelegate(address _new) only_owner { delegates[_new] = true; }
-	function removeDelegate(address _old) only_owner { delete delegates[_old]; }
+	function certified(address _who) public constant returns (bool) { return certs[_who].active; }
+	function getCertifier(address _who) public constant returns (address) { return certs[_who].certifier; }
+	function addDelegate(address _new) public only_owner { delegates[_new] = true; }
+	function removeDelegate(address _old) public only_owner { delete delegates[_old]; }
 
 	mapping (address => Certification) certs;
 	mapping (address => bool) delegates;
+
+	/// Unused interface methods.
+	function get(address, string) public constant returns (bytes32) {}
+	function getAddress(address, string) public constant returns (address) {}
+	function getUint(address, string) public constant returns (uint) {}
 }
