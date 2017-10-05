@@ -81,6 +81,17 @@ contract SecondPriceAuction {
 	{
 		flushEra();
 
+		// Flush bonus period:
+		if (bonusActive								// Bonus currently active
+			&& now >= beginTime + BONUS_DURATION	// But outside the automatic bonus period
+			&& lastNewInterest + BONUS_LATCH <= block.number	// And had no new interest for 5 blocks
+		) {
+			bonusActive = false;
+		} else if (buyins[msg.sender].received == 0) {
+			lastNewInterest = uint32(block.number);
+		}
+
+
 		uint accounted;
 		bool refund;
 		uint price;
@@ -220,7 +231,7 @@ contract SecondPriceAuction {
 		when_active
 		returns (uint extra)
 	{
-		if (now < beginTime + BONUS_DURATION) {
+		if (bonusActive) {
 			return _value * BONUS_SIZE / 100;
 		}
 		return 0;
@@ -267,9 +278,7 @@ contract SecondPriceAuction {
 		require (
 			ecrecover(STATEMENT_HASH, v, r, s) == who &&
 			certifier.certified(who) &&
-			isBasicAccount(who) &&
-			(tx.gasprice <= MAX_GAS_PRICE || now > beginTime + BONUS_DURATION) &&
-			msg.value >= DUST_LIMIT
+			isBasicAccount(who)
 		);
 		_;
 	}
@@ -306,6 +315,12 @@ contract SecondPriceAuction {
 	/// Must be false for any public function to be called.
 	bool public halted;
 
+	/// True as long as the bonus period is active.
+	bool public bonusActive = true;
+
+	/// The last block that had a new participant.
+	uint32 public lastNewInterest;
+
 	// Constants after constructor:
 
 	/// The tokens contract.
@@ -336,12 +351,6 @@ contract SecondPriceAuction {
 
 	// Static constants:
 
-	/// Anything less than this is considered dust and cannot be used to buy in.
-	uint constant public DUST_LIMIT = 5 finney;
-
-	/// The maximum gas price that may be provided for buyin transactions.
-	uint constant public MAX_GAS_PRICE = 5000000000;
-
 	/// The hash of the statement which must be signed in order to buyin.
 	bytes32 constant public STATEMENT_HASH = keccak256(STATEMENT);
 
@@ -356,8 +365,11 @@ contract SecondPriceAuction {
 	/// Percentage of the purchase that is free during bonus period.
 	uint constant public BONUS_SIZE = 15;
 
-	/// Duration after sale begins that bonus is active.
+	/// Minimum duration after sale begins that bonus is active.
 	uint constant public BONUS_DURATION = 1 hours;
+
+	/// Number of consecutive blocks where there must be no new interest before bonus ends.
+	uint constant public BONUS_LATCH = 5;
 
 	/// Number of Wei in one USD, constant.
 	uint constant public USDWEI = 1 ether / 250;
