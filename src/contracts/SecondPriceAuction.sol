@@ -82,11 +82,11 @@ contract SecondPriceAuction {
 		flushEra();
 
 		// Flush bonus period:
-		if (bonusActive								// Bonus currently active
-			&& now >= beginTime + BONUS_DURATION	// But outside the automatic bonus period
-			&& lastNewInterest + BONUS_LATCH <= block.number	// And had no new interest for 5 blocks
+		if (currentBonus > 0									// Bonus currently active
+			&& now >= beginTime + BONUS_DURATION				// But outside the automatic bonus period
+			&& lastNewInterest + BONUS_LATCH <= block.number	// And had no new interest for some blocks
 		) {
-			bonusActive = false;
+			currentBonus--;
 		} else if (buyins[msg.sender].received == 0) {
 			lastNewInterest = uint32(block.number);
 		}
@@ -119,7 +119,7 @@ contract SecondPriceAuction {
 		only_basic(_who)
 		before_beginning
 	{
-		uint128 bonus = _received * uint128(BONUS_SIZE) / 100;
+		uint128 bonus = _received * uint128(currentBonus) / 100;
 		uint128 accounted = _received + bonus;
 
 		buyins[_who].accounted += accounted;
@@ -231,10 +231,7 @@ contract SecondPriceAuction {
 		when_active
 		returns (uint extra)
 	{
-		if (bonusActive) {
-			return _value * BONUS_SIZE / 100;
-		}
-		return 0;
+		return _value * uint(currentBonus) / 100;
 	}
 
 	/// True if the sale is ongoing.
@@ -316,8 +313,8 @@ contract SecondPriceAuction {
 	/// Must be false for any public function to be called.
 	bool public halted;
 
-	/// True as long as the bonus period is active.
-	bool public bonusActive = true;
+	/// The current percentage of bonus that purchasers get.
+	uint8 public currentBonus = 15;
 
 	/// The last block that had a new participant.
 	uint32 public lastNewInterest;
@@ -366,14 +363,11 @@ contract SecondPriceAuction {
 	//# statement = function() { this.STATEMENT().map(s => s.substr(28)) }
 	//# ```
 
-	/// Percentage of the purchase that is free during bonus period.
-	uint constant public BONUS_SIZE = 15;
-
 	/// Minimum duration after sale begins that bonus is active.
 	uint constant public BONUS_DURATION = 1 hours;
 
 	/// Number of consecutive blocks where there must be no new interest before bonus ends.
-	uint constant public BONUS_LATCH = 5;
+	uint constant public BONUS_LATCH = 3;
 
 	/// Number of Wei in one USD, constant.
 	uint constant public USDWEI = 1 ether / 250;
