@@ -278,7 +278,8 @@ contract SecondPriceAuction {
 		require (
 			ecrecover(STATEMENT_HASH, v, r, s) == who &&
 			certifier.certified(who) &&
-			isBasicAccount(who)
+			isBasicAccount(who) &&
+			msg.value >= DUST_LIMIT
 		);
 		_;
 	}
@@ -350,6 +351,9 @@ contract SecondPriceAuction {
 	uint constant public ERA_PERIOD = 5 minutes;
 
 	// Static constants:
+
+	/// Anything less than this is considered dust and cannot be used to buy in.
+	uint constant public DUST_LIMIT = 5 finney;
 
 	/// The hash of the statement which must be signed in order to buyin.
 	bytes32 constant public STATEMENT_HASH = keccak256(STATEMENT);
