@@ -82,15 +82,17 @@ contract SecondPriceAuction {
 		flushEra();
 
 		// Flush bonus period:
-		if (currentBonus > 0									// Bonus currently active
-			&& now >= beginTime + BONUS_DURATION				// But outside the automatic bonus period
-			&& lastNewInterest + BONUS_LATCH <= block.number	// And had no new interest for some blocks
-		) {
-			currentBonus--;
-		} else if (buyins[msg.sender].received == 0) {
-			lastNewInterest = uint32(block.number);
+		if (currentBonus > 0) {
+			// Bonus is currently active...
+			if (now >= beginTime + BONUS_DURATION					// ...but outside the automatic bonus period
+				&& lastNewInterest + BONUS_LATCH <= block.number	// ...and had no new interest for some blocks
+			) {
+				currentBonus--;
+			}
+			if (buyins[msg.sender].received == 0) {	// We have new interest
+				lastNewInterest = uint32(block.number);
+			}
 		}
-
 
 		uint accounted;
 		bool refund;
