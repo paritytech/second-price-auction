@@ -369,7 +369,7 @@ contract SecondPriceAuction {
 	uint constant public BONUS_DURATION = 1 hours;
 
 	/// Number of consecutive blocks where there must be no new interest before bonus ends.
-	uint constant public BONUS_LATCH = 3;
+	uint constant public BONUS_LATCH = 2;
 
 	/// Number of Wei in one USD, constant.
 	uint constant public USDWEI = 1 ether / 250;
