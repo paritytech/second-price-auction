@@ -77,7 +77,7 @@ contract SecondPriceAuction {
 		payable
 		when_not_halted
 		when_active
-		only_eligable(msg.sender, v, r, s)
+		only_eligible(msg.sender, v, r, s)
 	{
 		flushEra();
 
@@ -273,7 +273,7 @@ contract SecondPriceAuction {
 
 	/// Ensure that the signature is valid, `who` is a certified, basic account,
 	/// the gas price is sufficiently low and the value is sufficiently high.
-	modifier only_eligable(address who, uint8 v, bytes32 r, bytes32 s) {
+	modifier only_eligible(address who, uint8 v, bytes32 r, bytes32 s) {
 		require (
 			ecrecover(STATEMENT_HASH, v, r, s) == who &&
 			certifier.certified(who) &&
