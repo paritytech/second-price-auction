@@ -13,6 +13,6 @@ module.exports = function(deployer) {
 	deployer.deploy(Token, 10000000000, OWNER).then(function() {
 		return deployer.deploy(MultiCertifier);
 	}).then(function() {
-		return deployer.deploy(Auction, Token.address, MultiCertifier.address, TREASURY, ADMIN, BEGIN_TIME, TOKEN_CAP);
+		return deployer.deploy(Auction, MultiCertifier.address, Token.address, TREASURY, ADMIN, BEGIN_TIME, TOKEN_CAP);
 	});
 };
