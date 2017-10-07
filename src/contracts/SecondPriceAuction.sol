@@ -372,7 +372,7 @@ contract SecondPriceAuction {
 	uint constant public BONUS_LATCH = 3;
 
 	/// Number of Wei in one USD, constant.
-	uint constant public USDWEI = 1 ether / 250;
+	uint constant public USDWEI = 3226 szabo;
 
 	/// Divisor of the token.
 	uint constant public DIVISOR = 1000;
