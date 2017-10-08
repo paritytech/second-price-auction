@@ -233,12 +233,11 @@ div#contributionPanel {
 	align-items: center;
 	display: flex;
 	flex-direction: column;
-	padding-top: 2em;
+	padding: 2em;
 }
 
 div#contributionPanel > * {
 	flex: 1 1 auto;
-	margin-bottom: 2em;
 }
 
 .contrib-main {
