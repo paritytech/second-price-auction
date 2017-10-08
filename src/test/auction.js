@@ -56,7 +56,7 @@ contract('auction', function(accounts) {
 			assert.equal(deal[0].toNumber(), 115, "Accounted with bonus.");
 			assert.equal(deal[1], false, "No refund needed.");
 			assert.isAbove(deal[2].toNumber(), 0, "Positive price.");
-			return auction.BONUS_DURATION.call();
+			return auction.BONUS_MAX_DURATION.call();
 		}).then(function(duration) {
 			increaseTime(duration.toNumber());
 			return auction.bonus.call(100);
