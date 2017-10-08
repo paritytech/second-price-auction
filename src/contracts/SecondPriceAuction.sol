@@ -84,10 +84,13 @@ contract SecondPriceAuction {
 		// Flush bonus period:
 		if (currentBonus > 0) {
 			// Bonus is currently active...
-			if (now >= beginTime + BONUS_DURATION					// ...but outside the automatic bonus period
+			if (now >= beginTime + BONUS_MIN_DURATION				// ...but outside the automatic bonus period
 				&& lastNewInterest + BONUS_LATCH <= block.number	// ...and had no new interest for some blocks
 			) {
 				currentBonus--;
+			}
+			if (now >= beginTime + BONUS_MAX_DURATION) {
+				currentBonus = 0;
 			}
 			if (buyins[msg.sender].received == 0) {	// We have new interest
 				lastNewInterest = uint32(block.number);
@@ -179,6 +182,24 @@ contract SecondPriceAuction {
 	function drain() public only_admin { treasury.transfer(this.balance); }
 
 	// Inspection:
+
+	/**
+	 * The formula for the price over time.
+	 *
+	 * This is a hand-crafted formula (no named to the constants) in order to
+	 * provide the following requirements:
+	 *
+	 * - Simple reciprocal curve (of the form y = a + b / (x + c));
+	 * - Would be completely unreasonable to end in the first 48 hours;
+	 * - Would reach $65m effective cap in 4 weeks.
+	 *
+	 * The curve begins with an effective cap (EC) of over $30b, more ether
+	 * than is in existance. After 48 hours, the EC reduces to approx. $1b.
+	 * At just over 10 days, the EC has reduced to $200m, and half way through
+	 * the 19th day it has reduced to $100m.
+	 *
+	 * Here's the curve: https://www.desmos.com/calculator/k6iprxzcrg?embed
+	 */
 
 	/// The current end time of the sale assuming that nobody else buys in.
 	function calculateEndTime() public constant returns (uint) {
@@ -366,10 +387,13 @@ contract SecondPriceAuction {
 	//# ```
 
 	/// Minimum duration after sale begins that bonus is active.
-	uint constant public BONUS_DURATION = 1 hours;
+	uint constant public BONUS_MIN_DURATION = 1 hours;
+
+	/// Minimum duration after sale begins that bonus is active.
+	uint constant public BONUS_MAX_DURATION = 24 hours;
 
 	/// Number of consecutive blocks where there must be no new interest before bonus ends.
-	uint constant public BONUS_LATCH = 3;
+	uint constant public BONUS_LATCH = 2;
 
 	/// Number of Wei in one USD, constant.
 	uint constant public USDWEI = 1 ether / 250;
