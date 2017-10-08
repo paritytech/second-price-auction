@@ -56,7 +56,7 @@ contract('contributions', function(accounts) {
 			return auction.totalAccounted.call()
 		}).then(function(accounted) {
 			assert.equal(accounted.toNumber(), 5750000000000000, "Received with bonus.");
-			return auction.BONUS_DURATION.call();
+			return auction.BONUS_MIN_DURATION.call();
 		}).then(function(bonus) {
 			increaseTime(bonus.toNumber());
 			return auction.currentBonus.call();
@@ -77,6 +77,16 @@ contract('contributions', function(accounts) {
 			return auction.totalAccounted.call()
 		}).then(function(accounted) {
 			assert.equal(accounted.toNumber(), 17100000000000000, "Smaller bonus again.");
+			return auction.BONUS_MAX_DURATION.call();
+		}).then(function(bonus) {
+			increaseTime(bonus.toNumber());
+			auction.buyin(v0, r0, s0, { from: CONTRIBUTOR, value: 5000000000000000 });
+			return auction.totalAccounted.call()
+		}).then(function(accounted) {
+			assert.equal(accounted.toNumber(), 22100000000000000, "No more bonus.");
+			return auction.currentBonus.call();
+		}).then(function(bonus) {
+			assert.equal(bonus.toNumber(), 0, "Bonus is 0.");
 		});
 	});
 });
