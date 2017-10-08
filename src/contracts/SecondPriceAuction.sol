@@ -77,9 +77,25 @@ contract SecondPriceAuction {
 		payable
 		when_not_halted
 		when_active
-		only_eligable(msg.sender, v, r, s)
+		only_eligible(msg.sender, v, r, s)
 	{
 		flushEra();
+
+		// Flush bonus period:
+		if (currentBonus > 0) {
+			// Bonus is currently active...
+			if (now >= beginTime + BONUS_MIN_DURATION				// ...but outside the automatic bonus period
+				&& lastNewInterest + BONUS_LATCH <= block.number	// ...and had no new interest for some blocks
+			) {
+				currentBonus--;
+			}
+			if (now >= beginTime + BONUS_MAX_DURATION) {
+				currentBonus = 0;
+			}
+			if (buyins[msg.sender].received == 0) {	// We have new interest
+				lastNewInterest = uint32(block.number);
+			}
+		}
 
 		uint accounted;
 		bool refund;
@@ -108,7 +124,7 @@ contract SecondPriceAuction {
 		only_basic(_who)
 		before_beginning
 	{
-		uint128 bonus = _received * uint128(BONUS_SIZE) / 100;
+		uint128 bonus = _received * uint128(currentBonus) / 100;
 		uint128 accounted = _received + bonus;
 
 		buyins[_who].accounted += accounted;
@@ -167,6 +183,24 @@ contract SecondPriceAuction {
 
 	// Inspection:
 
+	/**
+	 * The formula for the price over time.
+	 *
+	 * This is a hand-crafted formula (no named to the constants) in order to
+	 * provide the following requirements:
+	 *
+	 * - Simple reciprocal curve (of the form y = a + b / (x + c));
+	 * - Would be completely unreasonable to end in the first 48 hours;
+	 * - Would reach $65m effective cap in 4 weeks.
+	 *
+	 * The curve begins with an effective cap (EC) of over $30b, more ether
+	 * than is in existance. After 48 hours, the EC reduces to approx. $1b.
+	 * At just over 10 days, the EC has reduced to $200m, and half way through
+	 * the 19th day it has reduced to $100m.
+	 *
+	 * Here's the curve: https://www.desmos.com/calculator/k6iprxzcrg?embed
+	 */
+
 	/// The current end time of the sale assuming that nobody else buys in.
 	function calculateEndTime() public constant returns (uint) {
 		var factor = tokenCap / DIVISOR * USDWEI;
@@ -220,10 +254,7 @@ contract SecondPriceAuction {
 		when_active
 		returns (uint extra)
 	{
-		if (now < beginTime + BONUS_DURATION) {
-			return _value * BONUS_SIZE / 100;
-		}
-		return 0;
+		return _value * uint(currentBonus) / 100;
 	}
 
 	/// True if the sale is ongoing.
@@ -263,12 +294,11 @@ contract SecondPriceAuction {
 
 	/// Ensure that the signature is valid, `who` is a certified, basic account,
 	/// the gas price is sufficiently low and the value is sufficiently high.
-	modifier only_eligable(address who, uint8 v, bytes32 r, bytes32 s) {
+	modifier only_eligible(address who, uint8 v, bytes32 r, bytes32 s) {
 		require (
 			ecrecover(STATEMENT_HASH, v, r, s) == who &&
 			certifier.certified(who) &&
 			isBasicAccount(who) &&
-			(tx.gasprice <= MAX_GAS_PRICE || now > beginTime + BONUS_DURATION) &&
 			msg.value >= DUST_LIMIT
 		);
 		_;
@@ -306,6 +336,12 @@ contract SecondPriceAuction {
 	/// Must be false for any public function to be called.
 	bool public halted;
 
+	/// The current percentage of bonus that purchasers get.
+	uint8 public currentBonus = 15;
+
+	/// The last block that had a new participant.
+	uint32 public lastNewInterest;
+
 	// Constants after constructor:
 
 	/// The tokens contract.
@@ -339,9 +375,6 @@ contract SecondPriceAuction {
 	/// Anything less than this is considered dust and cannot be used to buy in.
 	uint constant public DUST_LIMIT = 5 finney;
 
-	/// The maximum gas price that may be provided for buyin transactions.
-	uint constant public MAX_GAS_PRICE = 5000000000;
-
 	/// The hash of the statement which must be signed in order to buyin.
 	bytes32 constant public STATEMENT_HASH = keccak256(STATEMENT);
 
@@ -353,14 +386,17 @@ contract SecondPriceAuction {
 	//# statement = function() { this.STATEMENT().map(s => s.substr(28)) }
 	//# ```
 
-	/// Percentage of the purchase that is free during bonus period.
-	uint constant public BONUS_SIZE = 15;
+	/// Minimum duration after sale begins that bonus is active.
+	uint constant public BONUS_MIN_DURATION = 1 hours;
 
-	/// Duration after sale begins that bonus is active.
-	uint constant public BONUS_DURATION = 1 hours;
+	/// Minimum duration after sale begins that bonus is active.
+	uint constant public BONUS_MAX_DURATION = 24 hours;
+
+	/// Number of consecutive blocks where there must be no new interest before bonus ends.
+	uint constant public BONUS_LATCH = 2;
 
 	/// Number of Wei in one USD, constant.
-	uint constant public USDWEI = 1 ether / 250;
+	uint constant public USDWEI = 3226 szabo;
 
 	/// Divisor of the token.
 	uint constant public DIVISOR = 1000;
