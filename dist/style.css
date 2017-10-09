@@ -56,7 +56,6 @@ body {
     display: flex;
     justify-content: center;
     align-items: center;
-    width: 100vw;
     padding: 20px 0;
     padding-top: 0;
     cursor: default;

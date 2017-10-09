@@ -1,4 +1,5 @@
 import moment from 'moment';
+import marked from 'marked';
 import countries from 'i18n-iso-countries';
 import React from 'react';
 import BigNumber from 'bignumber.js';
@@ -11,6 +12,44 @@ import {DutchAuctionABI, CertifierABI} from './abis.jsx';
 
 const tokenDivisor = 1000;
 const tokenTLA = 'DOT';
+const tokenStatement = `Please take my Ether and try to build Polkadot.`;
+/*const tokenStatement = `# Polkadot (Spend-all Second-price) Auction Dapp.
+
+To install:
+
+    $ npm install
+    $ npm install -g webpack
+
+To build:
+
+    webpack --watch
+
+Files will be build into \`dist/\`. Just symlink that dir into your dapps path.
+# Polkadot (Spend-all Second-price) Auction Dapp.
+
+To install:
+
+    $ npm install
+    $ npm install -g webpack
+
+To build:
+
+    webpack --watch
+
+Files will be build into \`dist/\`. Just symlink that dir into your dapps path.
+# Polkadot (Spend-all Second-price) Auction Dapp.
+
+To install:
+
+    $ npm install
+    $ npm install -g webpack
+
+To build:
+
+    webpack --watch
+
+Files will be build into \`dist/\`. Just symlink that dir into your dapps path.
+`;*/
 
 class TokenBalance extends ReactiveComponent {
 	constructor () {
@@ -24,6 +63,40 @@ class TokenBalance extends ReactiveComponent {
 		let decimals = m[2];
 		return (<span><b>{whole}<span style={{fontSize: '85%', opacity: 0.66}}>{decimals}</span></b> <span style={{fontSize: '85%'}}>{tokenTLA}</span></span>);
 	}
+}
+
+function schedule(raw, condition) {
+	return Bond.promise([bonds.chainName]).then(([n]) => {
+		let txschedHost = n == 'kovan' ? 'txsched-kovan' : 'txsched';
+		return new Promise((resolve, reject) => {
+	        var xhr = new XMLHttpRequest();
+	        xhr.open("post", `https://${txschedHost}.parity.io/`);
+	        xhr.setRequestHeader("Content-Type","application/json");
+	    	xhr.onreadystatechange = () => {
+	            if (xhr.readyState === 4) {
+	                if (xhr.status === 200) {
+						console.log(xhr.responseText);
+	                    let result = JSON.parse(xhr.responseText);
+	                    if (result.error == null) {
+	                        resolve(result.result);
+	                    }
+	                    else {
+	                        reject(result.error);
+	                    }
+	                }
+	                else {
+	                    reject('Invalid Status ' + xhr.status);
+	                }
+	            }
+			}
+			xhr.send(JSON.stringify({
+				jsonrpc: "2.0",
+				id: 1,
+				method: "scheduleTransaction",
+				params: [{time: +condition.time / 1000}, raw]
+			}));
+	    });
+	});
 }
 
 var drawSparkline = function(c, line, filled, cutoff) {
@@ -44,46 +117,7 @@ var drawSparkline = function(c, line, filled, cutoff) {
 		let xstep = width / Math.max(line.length, 12 * 24 * 2);
 		let ystep = (height - 6) / maxderiv;
 
-		/*if (window.devicePixelRatio) {
-			c.width = c.width * window.devicePixelRatio;
-			c.height = c.height * window.devicePixelRatio;
-			c.style.width = (c.width / window.devicePixelRatio) + 'px';
-			c.style.height = (c.height / window.devicePixelRatio) + 'px';
-			c.style.display = 'inline-block';
-			ctx.resetTransform();
-			ctx.scale(window.devicePixelRatio, window.devicePixelRatio);
-		}*/
 		ctx.clearRect(0, 0, width, height);
-/*
-		{
-			ctx.beginPath();
-			ctx.strokeStyle = 'red';
-			let x = 0;
-			let y = height - line[0] * ystep;
-			ctx.moveTo(x, y);
-			for (let i = 1; i < total; i = i + 1) {
-				x = x + xstep;
-				y = height - line[i] * ystep + 2;
-				ctx.lineTo(x, y);
-			}
-			ctx.stroke();
-		}
-
-		{
-			ctx.beginPath();
-			ctx.strokeStyle = 'blue';
-			let x = 0;
-			let y = height - filled[0] * ystep;
-			ctx.moveTo(x, y);
-			for (let i = 1; i < total; i = i + 1) {
-				x = x + xstep;
-				y = height + 2 - Math.max(1, filled[i] * ystep);
-				ctx.moveTo(x, height + 2);
-				ctx.lineTo(x, y);
-			}
-			ctx.stroke();
-		}
-*/
 		{
 			let x = 0;
 			let y = height - 4 - deriv[0] * ystep;
@@ -92,7 +126,6 @@ var drawSparkline = function(c, line, filled, cutoff) {
 				ctx.moveTo(x, y);
 				x = x + xstep;
 				y = height - 4 - deriv[i] * ystep;
-//				ctx.moveTo(x, height + 2);
 				let a = Math.max(0.25, (i - total + 100) / 100);
 				ctx.strokeStyle = `rgba(0, 0, 0, ${a})`;
 				ctx.lineWidth = 1 + Math.max(0, (i - total + 100) / 50);
@@ -100,15 +133,6 @@ var drawSparkline = function(c, line, filled, cutoff) {
 				ctx.stroke();
 			}
 		}
-
-
-/*
-		if (endpoint && style == 'line') {
-			ctx.beginPath();
-			ctx.fillStyle = 'rgba(255,0,0,0.5)';
-			ctx.arc(x, y, 1.5, 0, Math.PI*2);
-			ctx.fill();
-		}*/
 	}
 };
 
@@ -162,37 +186,9 @@ function endTimeBond(weiPerDOT) {
 	).subscriptable();
 }
 
-class ContributionPanel extends ReactiveComponent {
-	constructor() {
-		super(['request', 'signature'], {
-			minPurchase: DutchAuction().currentPrice(),
-			maxPurchase: DutchAuction().maxPurchase()
-		});
-        this.spend = new Bond;
-	}
-	render () {
-		var theDeal = DutchAuction().theDeal(this.spend);
-		return (<div id='contributionPanel'>
-			<BalanceBond
-				hintText="How much to spend?"
-                bond={this.spend}
-				disabled={!this.state.signature}
-			/>
-			<p style={{textAlign: 'center', margin: '1em 2em'}}>
-
-			</p>
-			<TransactButton
-				content={`Purchase ${tokenTLA}s`}
-				tx={()=>this.props.onContribute(this.spend, this.state.signature)}
-				disabled={this.spend.map(s => !this.state.signature || !s || +s < +this.state.minPurchase || +s > +this.state.maxPurchase || (this.state.request && !this.state.request.failed && !this.state.request.confirmed))}
-			/>
-		</div>);
-	}
-}
-
 let gasCostOptions = [
-	{ value: 1000000000, text: 'Low (< $0.06)' },
-	{ value: 5000000000, text: 'Normal (< $0.30)' },
+	{ value: 1000000000, text: 'Regular (< $0.06)' },
+	{ value: 5000000000, text: 'Medium (< $0.30)' },
 	{ value: 10000000000, text: 'High (< $0.60)' },
 	{ value: 50000000000, text: 'Very High (< $3)' },
 	{ value: 100000000000, text: 'Ludicrous (< $6)' },
@@ -210,7 +206,7 @@ class PrecontributionPanel extends ReactiveComponent {
 		this.spend = new Bond;
 		this.gasPrice = new Bond;
 		this.releaseDate = endTimeBond(this.weiPerDOT);
-		this.state = {delayedBuyin: false};
+		this.state = {delayedBuyin: null};
 		window.endTimeBond = endTimeBond;
 	}
 	render () {
@@ -228,12 +224,12 @@ class PrecontributionPanel extends ReactiveComponent {
 			</Form.Field>
 			<Divider/>
 			<Button.Group size='large'>
-				<Button primary disabled={!this.state.signature} basic={delayedBuyin} onClick={() => this.setState({delayedBuyin: false})}>Spend</Button>
+				<Button disabled={!this.state.signature} active={delayedBuyin === false} onClick={() => this.setState({delayedBuyin: false})}>Spend</Button>
 				<Button.Or />
-				<Button secondary disabled={!this.state.signature} basic={!delayedBuyin} onClick={() => this.setState({delayedBuyin: true})}>Bid</Button>
+				<Button disabled={!this.state.signature} active={delayedBuyin === true} onClick={() => this.setState({delayedBuyin: true})}>Bid</Button>
 			</Button.Group>
 			<div style={{width: '90%', marginTop: '1em'}}>{
-				delayedBuyin
+				delayedBuyin === true
 				? (<Message warning>
 					<Message.Header>Specify a minimum price</Message.Header>
 					Your transaction will be delayed until after your minimum price has been reached. If the auction closes at a price higher, then your transaction will be rejected and no spend will take place.
@@ -246,49 +242,65 @@ class PrecontributionPanel extends ReactiveComponent {
 					/>
 					<Label pointing>Minimum price per {tokenTLA}</Label>
 				</Message>)
-				: (<Message info>
+				: delayedBuyin === false ? (<Message info>
 					<Message.Header>No minimum price</Message.Header>
 					Your transaction will be processed at the earliest opportunity.
 				</Message>)
+				: null
 			}</div>
 			<Divider />
 			<Form.Field>
-			<DropdownBond disabled={!this.state.signature} enabled={true} options={gasCostOptions} bond={this.gasPrice} />
-			<div><Label pointing>Approximate amount to spend on prioritisation</Label></div>
+				<DropdownBond disabled={!this.state.signature || delayedBuyin === null} enabled={true} options={gasCostOptions} bond={this.gasPrice} />
+				<div><Label pointing>Approximate amount to spend on prioritisation</Label></div>
 			</Form.Field>
 			<Divider />
 			<p style={{textAlign: 'center', margin: '1em 2em'}}>{
-				delayedBuyin
+				delayedBuyin === true
 					? (<span>
-						Your transaction will be delayed until <Rspan>{this.releaseDate.map(_ => _.toUTCString())}</Rspan>. If the auction is still open when the transaction is processed, you will receive <b>at least <TokenBalance value={Bond.mapAll([this.spend, this.weiPerDOT], (s, w) => s / w * tokenDivisor)}/></b> when the network launches.
+						Your transaction will be delayed until <Rspan>{this.releaseDate.map(_ => _.toUTCString())}</Rspan>. If the auction is still open when the transaction is processed, you will spend <InlineBalance value={this.spend}/> to receive <b>at least <TokenBalance value={Bond.mapAll([this.spend, this.weiPerDOT], (s, w) => s / w * tokenDivisor)}/></b> when the network launches.
 					</span>)
-					: isActive ? (<Rspan>{DutchAuction().theDeal(this.spend).map(([accepted, refund, price]) => r
-						? <span>
-							<InlineBalance value={this.spend}/> is greater than the maximum spend.
-						</span>
-						: <span>
-							By spending <InlineBalance value={this.spend}/>, you will receive <b>at least <TokenBalance value={accepted / price}/></b> when the network launches.
-						</span>
-					)}</Rspan>)
-					: <span>You will spend <InlineBalance value={this.spend}/> to buy an unknown amount of {tokenTLA} tokens which will be made available when the network launches.</span>
+					: delayedBuyin === false ?
+						isActive ? (<Rspan>{DutchAuction().theDeal(this.spend).map(([accepted, refund, price]) => r
+							? <span>
+								<InlineBalance value={this.spend}/> is greater than the maximum spend.
+							</span>
+							: <span>
+								You will spend <InlineBalance value={this.spend}/> to receive <b>at least <TokenBalance value={accepted / price}/></b> when the network launches.
+							</span>
+						)}</Rspan>)
+						: <span>You will spend <InlineBalance value={this.spend}/> to buy {tokenTLA} tokens at the closing price of the auction, to be received when the network launches.</span>
+					: null
 			}</p>
 			<TransactButton
-				content={isActive ? `Purchase ${tokenTLA}s` : `Pre-Commit Funds`}
-				tx={()=>this.props.onContribute(this.spend, this.state.signature, delayedBuyin ? this.releaseDate : isActive ? null : new Date(this.state.beginTime * 1000), this.gasPrice )}
-				disabled={this.spend.map(s => !this.state.signature || !s || (isActive && (+s < +this.state.minPurchase || +s > +this.state.maxPurchase)) || (this.state.request && !this.state.request.failed && !this.state.request.confirmed && !this.state.request.scheduled))}
+				content={isActive && !delayedBuyin ? `Purchase ${tokenTLA}s` : `Pre-Commit Funds`}
+				tx={() => {
+					this.setState({ptsSubmit: null});
+					return this.props.onContribute(this.spend, this.state.signature, delayedBuyin ? this.releaseDate : isActive ? null : new Date(this.state.beginTime * 1000), this.gasPrice);
+				}}
+				disabled={this.spend.map(s => delayedBuyin === null || !this.state.signature || !s || (isActive && (+s < +this.state.minPurchase || +s > +this.state.maxPurchase)) || (this.state.request && !this.state.request.failed && !this.state.request.confirmed && !this.state.request.scheduled))}
 				size='large'
 			/>
 			{ this.state.request && this.state.request.scheduled
 				? (<Message>
 						<Message.Header>Commitment made</Message.Header>
 						<p>Your tranasction needs to be published in the future. <b>Ensure your computer is on, with internet connectivity, and Parity Ethereum Client running at {new Date(this.state.request.scheduled.time * 1000).toUTCString()}.</b> (You may turn your computer off in the meantime.)</p>
-						<p>If you prefer, you may submit it to Parity Technologies' scheduler to be published later. This exposes the transaction details to Parity Technologies. As a free service, <b>no guarantees</b> are made that the transaction be published on time.</p>
+						<p>If you prefer, you may submit it to Parity Technologies' Scheduler to be published later. This exposes the transaction details to Parity Technologies. As a free service, <b>no guarantees</b> are made that the transaction be published on time.</p>
 						<Divider />
 						<Button
-							content='Submit to Parity Technologies Scheduler'
+							content='Submit to Parity Tech Scheduler'
 							onClick={() => {
-								bonds.transaction(this.state.request.signed).then(tx => console.log(`Submit: ${tx.raw} ${tx.condition}`));
+								bonds.transaction(this.state.request.signed).then(tx => {
+									schedule(tx.raw, tx.condition)
+										.then(() => this.setState({ptsSubmit: true}))
+										.catch(() => this.setState({ptsSubmit: false}));
+								});
 							}}
+							disabled={this.state.ptsSubmit}
+							label={ this.state.ptsSubmit === true
+								? (<Label basic={false} color='green' icon='checkmark' content='done' />)
+								: this.state.ptsSubmit === false
+								? (<Label basic={false} color='red' icon='remove' content='error' />)
+								: null }
 						/>
 				</Message>)
 				: null
@@ -334,7 +346,7 @@ class Manager extends ReactiveComponent {
 	handleSign () {
 		let that = this;
 		bonds.me.then(me => {
-			let signReq = bonds.sign(DutchAuction().STATEMENT().map(removeSigningPrefix), me);
+			let signReq = bonds.sign(tokenStatement, me);
 			let signing = bonds.me.map(newMe => me === newMe ? signReq : null);
 			that.setState({signing});
 		});
@@ -352,7 +364,9 @@ class Manager extends ReactiveComponent {
         return (<div>
 			<section id='terms'>
 				<h1>Terms and Conditions</h1>
-				<p><Rspan>{DutchAuction().STATEMENT().map(removeSigningPrefix)}</Rspan></p>
+				<Segment>
+					<div style={{overflowY: 'scroll', height: '400px'}} dangerouslySetInnerHTML={{__html: marked(tokenStatement)}} />
+				</Segment>
 				<TermsPanel
 				  request={this.state.signing}
 	  			  onRequest={this.handleSign.bind(this)}
@@ -362,7 +376,7 @@ class Manager extends ReactiveComponent {
 				<h1>{this.props.active ? 'Send Funds' : 'Pre-Commit Funds'}</h1>
 				<PrecontributionPanel
 				  signature={this.state.signing ? this.state.signing.map(s => (s && s.signed || null)) : null}
-				  allowImmediate={this.props.active}
+				  isActive={this.props.active}
 	              request={this.state.contribution}
 	              onContribute={this.handleContribute.bind(this)}
 	            />
@@ -617,15 +631,9 @@ export class App extends ReactiveComponent {
 			  {
 				+this.state.bonus === 0 ? null : (<section className='bonus-main'>
 					<div className='container'>
-						<b>Bonus!</b> Purchases processed in the next <Rspan>{
-							Bond.mapAll([
-								DutchAuction().BONUS_DURATION(),
-								DutchAuction().beginTime(),
-								bonds.head.timestamp
-							], (d, b, n) => +b + +d - n / 1000)
-						}</Rspan> seconds receive an additional <b>
-							{+this.state.bonus}% {tokenTLA}
-						</b> tokens.
+						<b>Bonus</b> Receive up to <b>
+							{+this.state.bonus}%
+						</b> extra {tokenTLA} tokens when spending.
 					</div>
 				</section>)
 			  }
