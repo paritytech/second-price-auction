@@ -63,7 +63,7 @@ contract SecondPriceAuction {
 		admin = _admin;
 		beginTime = _beginTime;
 		tokenCap = _tokenCap;
-		endTime = beginTime + 15 days;
+		endTime = beginTime + 28 days;
 	}
 
 	// No default function, entry-level users
