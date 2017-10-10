@@ -1,4 +1,4 @@
-# Whitelabel Second Price Auction Dapp.
+# Polkadot (Spend-all Second-price) Auction Dapp.
 
 To install:
 

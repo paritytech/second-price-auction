@@ -31,6 +31,9 @@ contract SecondPriceAuction {
 	/// Admin injected a purchase.
 	event Injected(address indexed who, uint accounted, uint received);
 
+	/// Admin uninjected a purchase.
+	event Injected(address indexed who);
+
 	/// At least 5 minutes has passed since last Ticked event.
 	event Ticked(uint era, uint received, uint accounted);
 
@@ -133,6 +136,19 @@ contract SecondPriceAuction {
 		totalReceived += _received;
 		endTime = calculateEndTime();
 		Injected(_who, accounted, _received);
+	}
+
+	/// Reverses a previous `inject` command.
+	function uninject(address _who)
+		public
+		only_admin
+		before_beginning
+	{
+		totalAccounted -= buyins[_who].accounted;
+		totalReceived -= buyins[_who].received;
+		delete buyins[_who];
+		endTime = calculateEndTime();
+		Uninjected(_who);
 	}
 
 	/// Mint tokens for a particular participant.
