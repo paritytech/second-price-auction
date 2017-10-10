@@ -260,12 +260,12 @@ class PrecontributionPanel extends ReactiveComponent {
 						Your transaction will be delayed until <Rspan>{this.releaseDate.map(_ => _.toUTCString())}</Rspan>. If the auction is still open when the transaction is processed, you will spend <InlineBalance value={this.spend}/> to receive <b>at least <TokenBalance value={Bond.mapAll([this.spend, this.weiPerDOT], (s, w) => s / w * tokenDivisor)}/></b> when the network launches.
 					</span>)
 					: delayedBuyin === false ?
-						isActive ? (<Rspan>{DutchAuction().theDeal(this.spend).map(([accepted, refund, price]) => r
+						isActive ? (<Rspan>{DutchAuction().theDeal(this.spend).map(([accepted, refund, price]) => +refund > 0
 							? <span>
 								<InlineBalance value={this.spend}/> is greater than the maximum spend.
 							</span>
 							: <span>
-								You will spend <InlineBalance value={this.spend}/> to receive <b>at least <TokenBalance value={accepted / price}/></b> when the network launches.
+								You will spend <InlineBalance value={this.spend}/> to receive <b>at least <TokenBalance value={+accepted / +price}/></b> when the network launches.
 							</span>
 						)}</Rspan>)
 						: <span>You will spend <InlineBalance value={this.spend}/> to buy {tokenTLA} tokens at the closing price of the auction, to be received when the network launches.</span>
