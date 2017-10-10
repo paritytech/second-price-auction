@@ -23,8 +23,8 @@ contract('auction', function(accounts) {
 		}).then(function(allFinalised) {
 			assert.equal(allFinalised, false, "The sale is not finalised.");
 			return auction.currentPrice.call();
-		}).then(function(earlyPrice) {
-			assert.equal(earlyPrice, 0, "Price is 0 before the sale.");
+		}).then(assert.fail).catch(function(error) {
+			assert.include(error.message, 'invalid opcode', "No price before the sale.");
 			return auction.calculateEndTime.call();
 		}).then(function(end) {
 			endTime = end.toNumber();
@@ -56,17 +56,12 @@ contract('auction', function(accounts) {
 			assert.equal(deal[0].toNumber(), 115, "Accounted with bonus.");
 			assert.equal(deal[1], false, "No refund needed.");
 			assert.isAbove(deal[2].toNumber(), 0, "Positive price.");
-			return auction.BONUS_DURATION.call();
+			return auction.BONUS_MAX_DURATION.call();
 		}).then(function(duration) {
 			increaseTime(duration.toNumber());
 			return auction.bonus.call(100);
 		}).then(function(extra) {
-			assert.equal(extra.toNumber(), 0, "No bonus later.");
-			return auction.theDeal.call(100);
-		}).then(function(deal) {
-			assert.equal(deal[0].toNumber(), 100, "Accounted with no bonus.");
-			assert.equal(deal[1], false, "No refund needed.");
-			assert.isAbove(deal[2].toNumber(), 0, "Positive price.");
+			assert.equal(extra.toNumber(), 15, "Bonus later if no empty blocks.");
 			increaseTime(endTime);
 			return auction.isActive.call();
 		}).then(function(isActive) {
@@ -75,8 +70,8 @@ contract('auction', function(accounts) {
 		}).then(function(allFinalised) {
 			assert.equal(allFinalised, true, "No tokens sold, all finalised.");
 			return auction.currentPrice.call();
-		}).then(function(earlyPrice) {
-			assert.equal(earlyPrice, 0, "Price is 0 after the sale.");
+		}).then(assert.fail).catch(function(error) {
+			assert.include(error.message, 'invalid opcode', "No price after the sale.");
 		});
 	});
 });
