@@ -4,6 +4,7 @@ var util = require("ethereumjs-util");
 
 var Certifier = artifacts.require("MultiCertifier");
 var Auction = artifacts.require("SecondPriceAuction");
+var Token = artifacts.require("FrozenToken");
 
 const CONTRIBUTOR = "0x8b0080b4e5ded26f2a19c86f773a4830c89751e6";
 const PRIV = util.toBuffer('0x4446bfd934927adb55c749b15e2c49f2948eac401b01ae95503b9e7c61fb04bd', 'utf8');
@@ -24,6 +25,7 @@ contract('contributions', function(accounts) {
 		const DELEGATE = accounts[1];
 		var certifier;
 		var auction;
+		var token;
 		var tokenCap;
 		var endTime;
 		var v0;
@@ -87,6 +89,25 @@ contract('contributions', function(accounts) {
 			return auction.currentBonus.call();
 		}).then(function(bonus) {
 			assert.equal(bonus.toNumber(), 0, "Bonus is 0.");
+			return auction.calculateEndTime.call();
+		}).then(function(end) {
+			increaseTime(end.toNumber());
+			return auction.buyin(v0, r0, s0, { from: CONTRIBUTOR, value: 5000000000000000 });
+		}).then(assert.fail).catch(function(error) {
+			assert.include(error.message, 'invalid opcode', 'Sale is done.');
+			return auction.isActive.call();
+		}).then(function(isActive) {
+			assert.equal(isActive, false, "The sale has ended.");
+			return Token.deployed();
+		}).then(function(instance) {
+			token = instance;
+			const OWNER = accounts[2];
+			token.transfer(auction.address, 5000000000, { from: OWNER });
+			token.makeLiquid(auction.address, { from: OWNER });
+			auction.finalise(CONTRIBUTOR);
+			return token.balanceOf.call(CONTRIBUTOR);
+		}).then(function(balance) {
+			assert.equal(balance.toNumber(), 5000000000, "All DOTs to one guy.");
 		});
 	});
 });
