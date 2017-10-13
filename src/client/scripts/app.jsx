@@ -146,18 +146,18 @@ class Eras extends ReactiveComponent {
 //var DutchAuction = singleton(() => bonds && bonds.makeContract('0xC695F252Cb68021E99E020ebd3e817a82ADEe17F', DutchAuctionABI));
 //var DutchAuction = singleton(() => bonds && bonds.makeContract('0xe643110fBa0b7a72BA454B0AE98c5Cb6345fe34A', DutchAuctionABI));
 var DutchAuction = singleton(() => bonds && bonds.makeContract('0xF6E898897E60cE9839Ec445aA71B05F90e499FB7', DutchAuctionABI));
-var Certifier = singleton(() => bonds && bonds.makeContract(DutchAuction().certifier(), CertifierABI));
+var Certifier = singleton(() => bonds && bonds.makeContract(DutchAuction() && DutchAuction().certifier(), CertifierABI));
 
 class ContributionPanel extends ReactiveComponent {
 	constructor() {
 		super(['request', 'signature'], {
-			minPurchase: DutchAuction().currentPrice(),
-			maxPurchase: DutchAuction().maxPurchase()
+			minPurchase: DutchAuction() && DutchAuction().currentPrice(),
+			maxPurchase: DutchAuction() && DutchAuction().maxPurchase()
 		});
 		this.spend = new Bond;
 	}
 	render () {
-		var theDeal = DutchAuction().theDeal(this.spend);
+		var theDeal = DutchAuction() && DutchAuction().theDeal(this.spend);
 		return (
 			<div id='contributionPanel'>
 				<BalanceBond
@@ -210,10 +210,10 @@ let contributionStatus = singleton(() => new TransformBond((h, b, e, c) =>
     h ? { halted: {} } :
     { active: { done: c - b, have: e - c } }
 , [
-    DutchAuction().halted(),
-    DutchAuction().beginTime(),
-    DutchAuction().endTime(),
-    bonds.head.timestamp.map(t => t / 1000)
+    DutchAuction() && DutchAuction().halted(),
+    DutchAuction() && DutchAuction().beginTime(),
+    DutchAuction() && DutchAuction().endTime(),
+    bonds && bonds.head.timestamp.map(t => t / 1000)
 ]));
 
 const states = {
@@ -229,14 +229,14 @@ class Manager extends ReactiveComponent {
 	}
 	handleSign () {
 		let that = this;
-		bonds.me.then(me => {
-			let signReq = bonds.sign(DutchAuction().STATEMENT().map(removeSigningPrefix), me);
-			let signing = bonds.me.map(newMe => me === newMe ? signReq : null);
+    bonds && bonds.me.then(me => {
+			let signReq = bonds && bonds.sign(DutchAuction() && DutchAuction().STATEMENT().map(removeSigningPrefix), me);
+			let signing = bonds && bonds.me.map(newMe => me === newMe ? signReq : null);
 			that.setState({signing});
 		});
 	}
 	handleContribute (value, signature) {
-		let t = DutchAuction()['buyin'](...signature, { value, gasPrice: DutchAuction().MAX_GAS_PRICE() });
+		let t = DutchAuction() && DutchAuction()['buyin'](...signature, { value, gasPrice: DutchAuction() && DutchAuction().MAX_GAS_PRICE() });
 		this.setState({
 			contribution: t
 		});
@@ -247,7 +247,7 @@ class Manager extends ReactiveComponent {
 			<div>
 				<section id='terms'>
 					<h1>Terms and Conditions</h1>
-					<p><Rspan>{DutchAuction().STATEMENT().map(removeSigningPrefix)}</Rspan></p>
+					<p><Rspan>{DutchAuction() && DutchAuction().STATEMENT().map(removeSigningPrefix)}</Rspan></p>
 					<TermsPanel
 						request={this.state.signing}
 						onRequest={this.handleSign.bind(this)}
@@ -270,7 +270,7 @@ class Bouncer extends ReactiveComponent {
 	constructor() {
 		super([], {
 			status: contributionStatus(),
-			kyc: Certifier().certified(bonds.me)
+			kyc: Certifier().certified(bonds && bonds.me)
 		});
 	}
 
@@ -308,9 +308,9 @@ class Bouncer extends ReactiveComponent {
 class Subtitling extends ReactiveComponent {
 	constructor () {
 		super([], {
-			isActive: DutchAuction().isActive(),
-			allFinalised: DutchAuction().allFinalised(),
-			totalReceived: DutchAuction().totalReceived()
+			isActive: DutchAuction() && DutchAuction().isActive(),
+			allFinalised: DutchAuction() && DutchAuction().allFinalised(),
+			totalReceived: DutchAuction() && DutchAuction().totalReceived()
 		});
 	}
 	render () {
@@ -320,9 +320,9 @@ class Subtitling extends ReactiveComponent {
 			if (this.state.isActive) {
         return (
 					<p>
-						<TokenBalance value={DutchAuction().tokenCap()}/> to be sold!<br/>
-						<InlineBalance value={DutchAuction().totalReceived()}/> raised so far!<br/>
-						Auction will close <Rspan>{DutchAuction().endTime().map(t => moment.unix(t).fromNow())}</Rspan> <i>at the latest</i>!<br/>
+						<TokenBalance value={DutchAuction() && DutchAuction().tokenCap()}/> to be sold!<br/>
+						<InlineBalance value={DutchAuction() && DutchAuction().totalReceived()}/> raised so far!<br/>
+						Auction will close <Rspan>{DutchAuction() && DutchAuction().endTime().map(t => moment.unix(t).fromNow())}</Rspan> <i>at the latest</i>!<br/>
 						Final price will be at least <InlineBalance value={minFinal}/> per {tokenTLA}!
 					</p>
 				);
@@ -330,14 +330,14 @@ class Subtitling extends ReactiveComponent {
 				if (+this.state.totalReceived > 0) {
 					return (
 						<p>
-							Auction closed <Rspan>{DutchAuction().endTime().map(t => moment.unix(t).fromNow())}</Rspan>:<br/>
+							Auction closed <Rspan>{DutchAuction() && DutchAuction().endTime().map(t => moment.unix(t).fromNow())}</Rspan>:<br/>
 							<InlineBalance value={this.state.totalReceived} /> raised in total!<br/>
 						</p>
 					);
 				} else {
 					return (
 						<p>
-							Auction will begin <Rspan>{DutchAuction().beginTime().map(t => moment.unix(t).fromNow())}</Rspan>!
+							Auction will begin <Rspan>{DutchAuction() && DutchAuction().beginTime().map(t => moment.unix(t).fromNow())}</Rspan>!
 						</p>
 					);
 				}
@@ -364,9 +364,9 @@ class Subtitling extends ReactiveComponent {
 class AuctionSummary extends ReactiveComponent {
 	constructor () {
 		super([], {
-			isActive: DutchAuction().isActive(),
-			allFinalised: DutchAuction().allFinalised(),
-			totalAccounted: DutchAuction().totalAccounted()
+			isActive: DutchAuction() && DutchAuction().isActive(),
+			allFinalised: DutchAuction() && DutchAuction().allFinalised(),
+			totalAccounted: DutchAuction() && DutchAuction().totalAccounted()
 		});
 	}
 	render () {
@@ -379,19 +379,19 @@ class AuctionSummary extends ReactiveComponent {
 						<div className={'field'}>
 							<div>Remaining for sale</div>
 							<div className='_fieldValue _basic'>
-								<TokenBalance value={DutchAuction().tokensAvailable()}/>
+								<TokenBalance value={DutchAuction() && DutchAuction().tokensAvailable()}/>
 							</div>
 						</div>
 						<div className={'field'}>
 							<div>Current Price</div>
 							<div className='_fieldValue _basic'>
-								<InlineBalance value={DutchAuction().currentPrice().map(x => x.times(tokenDivisor))} defaultDenom='finney'/>
+								<InlineBalance value={DutchAuction() && DutchAuction().currentPrice().map(x => x.times(tokenDivisor))} defaultDenom='finney'/>
 							</div>
 						</div>
 						<div className={'field'}>
 							<div>Max Purchase</div>
 							<div className='_fieldValue _basic'>
-								<InlineBalance value={DutchAuction().maxPurchase()} defaultDenom='ether'/>
+								<InlineBalance value={DutchAuction() && DutchAuction().maxPurchase()} defaultDenom='ether'/>
 							</div>
 						</div>
 					</div>
@@ -404,7 +404,7 @@ class AuctionSummary extends ReactiveComponent {
 							<div className={'field'}>
 								<div>Closing Price</div>
 								<div className='_fieldValue _basic'>
-									<InlineBalance value={DutchAuction().tokenCap().map(r => this.state.totalAccounted.mul(divisor).div(r))} />
+									<InlineBalance value={DutchAuction() && DutchAuction().tokenCap().map(r => this.state.totalAccounted.mul(divisor).div(r))} />
 								</div>
 							</div>
 							<div className={'field'}></div>
@@ -436,14 +436,14 @@ class AuctionSummary extends ReactiveComponent {
 						  <div className='field'>
 							<div>Status</div>
 							<Rdiv
-							  className={bonds.peerCount.map(c => '_fieldValue ' + (c > 0 ? '_online' : '_offline'))}
-							>{bonds.peerCount.map(c => c > 0 ? '● Online' : '○ Offline')}</Rdiv>
+							  className={bonds && bonds.peerCount.map(c => '_fieldValue ' + (c > 0 ? '_online' : '_offline'))}
+							>{bonds && bonds.peerCount.map(c => c > 0 ? '● Online' : '○ Offline')}</Rdiv>
 						  </div>
 						  <div className='field'>
 							<div>Network</div>
 							<Rdiv
-							  className={bonds.chainName.map(c => '_fieldValue _' + c)}
-							>{bonds.chainName.map(capitalizeFirstLetter)}</Rdiv>
+							  className={bonds && bonds.chainName.map(c => '_fieldValue _' + c)}
+							>{bonds && bonds.chainName.map(capitalizeFirstLetter)}</Rdiv>
 						  </div>
 						  <div className='field'>
 							<div>Number</div>
@@ -456,25 +456,25 @@ class AuctionSummary extends ReactiveComponent {
 export class App extends ReactiveComponent {
 	constructor() {
 		super([], {
-			purchased: bonds && bonds.accounts.mapEach(a => DutchAuction().buyins(a)).map(bs => bs.reduce((x, a) => [x[0].add(a[0]), x[1].add(a[1])])),
-			isActive: DutchAuction().isActive(),
-			allFinalised: DutchAuction().allFinalised(),
-			totalAccounted: DutchAuction().totalAccounted(),
-			bonus: DutchAuction().bonus(100),
+			purchased: bonds && bonds.accounts.mapEach(a => DutchAuction() && DutchAuction().buyins(a)).map(bs => bs.reduce((x, a) => [x[0].add(a[0]), x[1].add(a[1])])),
+			isActive: DutchAuction() && DutchAuction().isActive(),
+			allFinalised: DutchAuction() && DutchAuction().allFinalised(),
+			totalAccounted: DutchAuction() && DutchAuction().totalAccounted(),
+			bonus: DutchAuction() && DutchAuction().bonus(100),
 		});
-		let earliestBlock = DutchAuction().Ticked({limit: 1}).map(x => x.blockNumber - 2*7*24*60*4);
-		let ticks = DutchAuction().Ticked({limit: 50000, startBlock: earliestBlock});
+		let earliestBlock = DutchAuction() && DutchAuction().Ticked({limit: 1}).map(x => x.blockNumber - 2*7*24*60*4);
+		let ticks = DutchAuction() && DutchAuction().Ticked({limit: 50000, startBlock: earliestBlock});
 		this.eras = Bond.mapAll([
-			DutchAuction().ERA_PERIOD(),
-			DutchAuction().tokenCap(),
-			DutchAuction().USDWEI(),
+      DutchAuction() && DutchAuction().ERA_PERIOD(),
+      DutchAuction() && DutchAuction().tokenCap(),
+      DutchAuction() && DutchAuction().USDWEI(),
 			ticks,
-			DutchAuction().totalAccounted(),
-			DutchAuction().eraIndex(),
+      DutchAuction() && DutchAuction().totalAccounted(),
+      DutchAuction() && DutchAuction().eraIndex(),
 			Bond.mapAll([
-				DutchAuction().ERA_PERIOD(),
-				DutchAuction().beginTime(),
-				bonds.time
+        DutchAuction() && DutchAuction().ERA_PERIOD(),
+        DutchAuction() && DutchAuction().beginTime(),
+        bonds && bonds.time
 			], (p, b, n) => Math.ceil((n / 1000 - b) / p))
 		], (eraPeriod, tokenCap, usdWei, ticks, latestAccounted, latestEra, era) => {
 			let erasAccounted = [];
@@ -514,7 +514,7 @@ export class App extends ReactiveComponent {
 					<nav className='nav-header'>
 						<div className='container'>
 								<span id='logo'>
-								<AccountIcon address={DutchAuction().address} id='logoIcon' style={{width: '3em', marginTop: '0.5em', boxShadow: '0px 2px 30px 0px rgba(0, 0, 0, 0.5)'}}/>
+								<AccountIcon address={DutchAuction() && DutchAuction().address} id='logoIcon' style={{width: '3em', marginTop: '0.5em', boxShadow: '0px 2px 30px 0px rgba(0, 0, 0, 0.5)'}}/>
 								<span style={{marginLeft: '1em'}}>WHITELABEL</span>
 								</span>
 						</div>
@@ -531,10 +531,10 @@ export class App extends ReactiveComponent {
 					<section className='state-main'>
 						<div className='container'>
 							You spent <InlineBalance value={purchased[1]}/> to buy {this.state.isActive ? (
-							<span>at least <TokenBalance value={DutchAuction().currentPrice().map(_ => purchased[0].div(_))}/></span>
+							<span>at least <TokenBalance value={DutchAuction() && DutchAuction().currentPrice().map(_ => purchased[0].div(_))}/></span>
             ) : (
 							<span>exactly <TokenBalance value={
-                DutchAuction().tokenCap().map(r => purchased[0].mul(r).div(this.state.totalAccounted))
+                DutchAuction() && DutchAuction().tokenCap().map(r => purchased[0].mul(r).div(this.state.totalAccounted))
               }/></span>
             )}
 						</div>
@@ -552,9 +552,9 @@ export class App extends ReactiveComponent {
 						<div className='container'>
 							<b>Bonus!</b> Purchases processed in the next <Rspan>{
 								Bond.mapAll([
-									DutchAuction().BONUS_DURATION(),
-									DutchAuction().beginTime(),
-									bonds.head.timestamp
+                  DutchAuction() && DutchAuction().BONUS_DURATION(),
+                  DutchAuction() && DutchAuction().beginTime(),
+                  bonds && bonds.head.timestamp
 								], (d, b, n) => +b + +d - n / 1000)
 							}</Rspan> seconds receive an additional <b>{+this.state.bonus}% {tokenTLA}</b> tokens.
 						</div>
